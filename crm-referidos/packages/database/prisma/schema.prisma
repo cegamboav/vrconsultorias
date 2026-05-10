@@ -1,0 +1,96 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  RESPONDED
+  SCHEDULED
+  CLOSED
+}
+
+enum CloseSubstatus {
+  INVESTED
+  NOT_INVESTED_TEMPORARY
+  NOT_INVESTED_FINAL
+}
+
+model User {
+  id         String     @id @default(cuid())
+  name       String
+  email      String     @unique
+  phone      String?
+  password   String
+  role       Role       @default(USER)
+  calendly   String?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  activities Activity[]
+  leads      Lead[]     @relation("LeadOwner")
+}
+
+
+model Lead {
+  id                 String            @id @default(cuid())
+  leadNumber         Int               @unique @default(autoincrement())
+  ownerId            String?
+  owner              User?             @relation("LeadOwner", fields: [ownerId], references: [id])
+  fullName           String
+  phone              String				@unique
+  email              String?
+  source             LeadSource
+  referredBy         String?
+  status             LeadStatus        @default(NEW)
+  closeSubstatus     CloseSubstatus?
+  noInvestmentReason String?
+  nextActionDate     DateTime?
+  lastActivityAt     DateTime?
+  closedAt           DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  activities         Activity[]
+}
+
+enum LeadSource {
+  REFERRAL
+  DIRECT
+  ORGANIC
+  OTHER
+}
+
+model Activity {
+  id          String   @id @default(cuid())
+  leadId      String
+  userId      String?
+  type        ActivityType
+  description String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  @@index([leadId, createdAt])
+  @@index([type])
+}
+
+enum ActivityType {
+  LEAD_CREATED
+  STATUS_CHANGED
+  NOTE_ADDED
+  WHATSAPP_SENT
+  REMINDER_CREATED
+  MEETING_SCHEDULED
+  LEAD_REACTIVATED
+  LEAD_CLOSED
+}

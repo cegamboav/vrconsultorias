@@ -1,0 +1,40 @@
+{
+  "name": "crm-referidos",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Sistema web de gestion de referidos y conversion de reuniones.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "setup": "npm install && npm run db:up && npm run prisma:generate && npm run prisma:migrate",
+    "dev": "concurrently \"npm run dev --workspace @crm/frontend\" \"npm run dev --workspace @crm/backend\"",
+    "dev:frontend": "npm run dev --workspace @crm/frontend",
+    "dev:backend": "npm run dev --workspace @crm/backend",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:down:volumes": "docker compose down -v",
+    "db:logs": "docker compose logs -f postgres pgadmin",
+    "build": "npm run build --workspace @crm/frontend && npm run build --workspace @crm/backend",
+    "start": "npm run start --workspace @crm/backend",
+    "prisma:generate": "npm run prisma:generate --workspace @crm/database",
+    "prisma:migrate": "npm run prisma:migrate --workspace @crm/database",
+    "prisma:deploy": "npm run prisma:deploy --workspace @crm/database",
+    "seed": "npm run seed --workspace @crm/database",
+    "prisma:studio": "npm run prisma:studio --workspace @crm/database",
+    "lint": "npm run lint --workspace @crm/frontend && npm run lint --workspace @crm/backend",
+    "format": "npm run format --workspace @crm/frontend && npm run format --workspace @crm/backend"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.11.1",
+    "concurrently": "^9.1.2",
+    "globals": "^15.9.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "react-router-dom": "^7.15.0"
+  }
+}
