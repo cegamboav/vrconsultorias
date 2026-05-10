@@ -1,0 +1,212 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-brand-shell text-gray-900 antialiased;
+  }
+}
+
+@layer components {
+  /* Auth (login): pantalla oscura independiente del shell claro */
+  .auth-screen {
+    @apply min-h-screen bg-slate-950 text-slate-100 antialiased;
+  }
+
+  .page-bg {
+    @apply bg-slate-950 text-slate-100;
+  }
+
+  .page-center {
+    @apply flex min-h-screen items-center justify-center px-4;
+  }
+
+  /* —— App shell (área privada /app) —— */
+  .app-shell {
+    @apply flex min-h-screen;
+  }
+
+  .app-sidebar-backdrop {
+    @apply fixed inset-0 z-30 bg-gray-900/20 md:hidden;
+  }
+
+  .app-sidebar {
+    @apply fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-gray-200 bg-white transition-transform duration-200 ease-out md:static md:z-0 md:translate-x-0;
+  }
+
+  .app-sidebar--closed {
+    @apply -translate-x-full md:translate-x-0;
+  }
+
+  .app-sidebar-header {
+    @apply flex h-16 shrink-0 items-center border-b border-gray-100 px-5;
+  }
+
+  .app-sidebar-brand {
+    @apply text-lg font-semibold tracking-tight text-brand-primary;
+  }
+
+  .app-sidebar-tagline {
+    @apply text-xs font-medium text-gray-500;
+  }
+
+  .app-sidebar-nav {
+    @apply flex flex-1 flex-col gap-1 p-3;
+  }
+
+  .sidebar-link {
+    @apply flex items-center rounded-lg px-3 py-2.5 text-sm font-medium text-gray-600 transition-colors hover:bg-brand-muted hover:text-brand-primary;
+  }
+
+  .sidebar-link-active {
+    @apply bg-brand-primary/10 text-brand-primary;
+  }
+
+  .sidebar-footer {
+    @apply border-t border-gray-100 p-3;
+  }
+
+  .sidebar-logout {
+    @apply flex w-full items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50;
+  }
+
+  .app-main-wrap {
+    @apply flex min-h-screen flex-1 flex-col md:min-h-0;
+  }
+
+  .app-topbar {
+    @apply flex h-16 shrink-0 items-center justify-between gap-4 border-b border-gray-200 bg-white px-4 md:px-6;
+  }
+
+  .app-topbar-left {
+    @apply flex min-w-0 items-center gap-3;
+  }
+
+  .app-menu-btn {
+    @apply inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-700 transition-colors hover:bg-gray-50 md:hidden;
+  }
+
+  .app-topbar-title {
+    @apply truncate text-lg font-semibold text-gray-900;
+  }
+
+  .app-topbar-user {
+    @apply text-right;
+  }
+
+  .app-topbar-user-name {
+    @apply truncate text-sm font-medium text-gray-900;
+  }
+
+  .app-topbar-user-role {
+    @apply truncate text-xs text-gray-500;
+  }
+
+  .app-main {
+    @apply flex-1 overflow-y-auto p-4 md:p-6;
+  }
+
+  .app-loading {
+    @apply flex min-h-screen items-center justify-center bg-brand-shell text-sm text-gray-600;
+  }
+
+  .text-app-muted {
+    @apply text-gray-600;
+  }
+
+  .stack-md {
+    @apply flex flex-col gap-4;
+  }
+
+  .stack-lg {
+    @apply flex flex-col gap-6;
+  }
+
+  /* Card: variante auth (oscuro, login) */
+  .card {
+    @apply w-full max-w-md rounded-xl border border-slate-800 bg-slate-900/70 p-6;
+  }
+
+  /* Card: variante surface (CRM / contenido) */
+  .card-surface {
+    @apply w-full rounded-xl border border-gray-200 bg-white p-6;
+  }
+
+  .card-header {
+    @apply mb-5;
+  }
+
+  .card-title {
+    @apply text-2xl font-semibold text-white;
+  }
+
+  .card-subtitle {
+    @apply mt-2 text-sm text-slate-300;
+  }
+
+  .card-surface .card-title {
+    @apply text-xl font-semibold text-gray-900;
+  }
+
+  .card-surface .card-subtitle {
+    @apply text-sm text-gray-600;
+  }
+
+  .form-control {
+    @apply flex flex-col gap-1.5;
+  }
+
+  .form-label {
+    @apply text-sm text-slate-300;
+  }
+
+  .input {
+    @apply h-11 rounded-lg border border-slate-700 bg-slate-950 px-3 text-sm text-slate-100 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/25;
+  }
+
+  .input-error {
+    @apply border-rose-500 focus:border-rose-500 focus:ring-rose-500/25;
+  }
+
+  .form-error {
+    @apply text-sm text-rose-400;
+  }
+
+  .btn {
+    @apply inline-flex h-11 items-center justify-center rounded-lg px-4 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .btn-primary {
+    @apply bg-brand-primary text-white hover:bg-brand-primary-hover;
+  }
+
+  .btn-ghost {
+    @apply border border-slate-700 bg-transparent text-slate-200 hover:bg-slate-800;
+  }
+
+  .btn-ghost-surface {
+    @apply border border-gray-200 bg-white text-gray-800 hover:bg-gray-50;
+  }
+
+  .page-header {
+    @apply flex flex-col gap-4 rounded-xl border border-slate-800 bg-slate-900/40 p-5 md:flex-row md:items-center md:justify-between;
+  }
+
+  .eyebrow {
+    @apply text-xs uppercase tracking-widest text-sky-300;
+  }
+
+  .heading {
+    @apply mt-1 text-2xl font-semibold text-white;
+  }
+
+  .muted {
+    @apply text-slate-300;
+  }
+}
