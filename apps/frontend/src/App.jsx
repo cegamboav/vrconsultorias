@@ -3,6 +3,9 @@ import AppLayout from "./app/layout/AppLayout";
 import ProtectedRoute from "./app/routes/ProtectedRoute";
 import { AuthProvider } from "./features/auth/context/AuthContext";
 import LoginPage from "./features/auth/pages/LoginPage";
+import CreateLeadPage from "./pages/app/CreateLeadPage";
+import LeadDetailPage from "./pages/app/LeadDetailPage";
+import LeadsPage from "./pages/app/LeadsPage";
 import PlaceholderPage from "./pages/app/PlaceholderPage";
 
 export default function App() {
@@ -31,13 +34,10 @@ export default function App() {
             />
             <Route
               path="leads"
-              element={
-                <PlaceholderPage
-                  title="Leads"
-                  description="Listado y gestión de prospectos. Contenido próximo."
-                />
-              }
+              element={<LeadsPage />}
             />
+            <Route path="leads/new" element={<CreateLeadPage />} />
+            <Route path="leads/:id" element={<LeadDetailPage />} />
             <Route
               path="pipeline"
               element={

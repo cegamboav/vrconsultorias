@@ -120,6 +120,69 @@
     @apply text-gray-600;
   }
 
+  /* Table (MVP) */
+  .table {
+    @apply w-full overflow-hidden rounded-xl border border-gray-200 bg-white;
+  }
+
+  .table table {
+    @apply w-full;
+  }
+
+  .table th {
+    @apply bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600;
+  }
+
+  .table td {
+    @apply border-t border-gray-100 px-4 py-3 text-sm text-gray-800;
+  }
+
+  .table-row-link {
+    @apply text-brand-primary hover:underline;
+  }
+
+  /* Badges */
+  .badge {
+    @apply inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold;
+  }
+
+  .badge-neutral {
+    @apply border-gray-200 bg-gray-50 text-gray-700;
+  }
+
+  .badge-info {
+    @apply border-blue-200 bg-blue-50 text-blue-700;
+  }
+
+  .badge-warning {
+    @apply border-amber-200 bg-amber-50 text-amber-800;
+  }
+
+  .badge-success {
+    @apply border-emerald-200 bg-emerald-50 text-emerald-700;
+  }
+
+  .badge-muted {
+    @apply border-gray-200 bg-white text-gray-500;
+  }
+
+  /* Timeline */
+  .timeline {
+    @apply flex flex-col gap-3;
+  }
+
+  .timeline-item {
+    @apply rounded-xl border border-gray-200 bg-white p-4;
+  }
+
+  .timeline-meta {
+    @apply flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500;
+  }
+
+  .timeline-title {
+    @apply mt-2 text-sm font-medium text-gray-900;
+  }
+
   .stack-md {
     @apply flex flex-col gap-4;
   }
