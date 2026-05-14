@@ -31,7 +31,7 @@ async function main() {
         fullName: "Juan Perez",
         phone: "50670000000",
         email: "juan@example.com",
-        source: LeadSource.REFERRAL,
+        source: LeadSource.REFERIDO,
         status: LeadStatus.NEW,
         ownerId: admin.id,
         activities: {

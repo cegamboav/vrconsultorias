@@ -1,28 +1,45 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
 import StatusBadge from "../../components/ui/StatusBadge";
+import { useToast } from "../../components/ui/Toast";
+import { formatActivityDescription } from "../../features/leads/activityDisplay";
+import {
+  activityTypeLabel,
+  displayLeadSource,
+  followUpReasonLabel,
+  followUpReasonOptions,
+  leadStatusLabel
+} from "../../features/leads/labels";
+import {
+  followUpDueBucket,
+  formatDateOnly,
+  minFollowUpYmd,
+  toLocalYmd
+} from "../../features/leads/dateUi";
 import { apiFetch } from "../../lib/apiClient";
+
+const TIMELINE_PAGE = 5;
 
 function formatDate(value) {
   if (!value) return "-";
   return new Date(value).toLocaleString();
 }
 
-const activityLabels = {
-  LEAD_CREATED: "Lead creado",
-  STATUS_CHANGED: "Cambio de estado",
-  NOTE_ADDED: "Nota",
-  WHATSAPP_SENT: "WhatsApp",
-  REMINDER_CREATED: "Recordatorio",
-  MEETING_SCHEDULED: "Reunión",
-  LEAD_REACTIVATED: "Reactivación",
-  LEAD_CLOSED: "Cierre"
+const allowedNextByStatus = {
+  NEW: ["CONTACTED"],
+  CONTACTED: ["SCHEDULED", "FOLLOW_UP"],
+  SCHEDULED: ["CLOSED_INVESTED", "CLOSED_NOT_INVESTED", "FOLLOW_UP"],
+  FOLLOW_UP: ["CONTACTED", "SCHEDULED", "CLOSED_INVESTED", "CLOSED_NOT_INVESTED"],
+  CLOSED_INVESTED: [],
+  CLOSED_NOT_INVESTED: ["FOLLOW_UP", "CONTACTED", "SCHEDULED"]
 };
 
 export default function LeadDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const toast = useToast();
   const [lead, setLead] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
@@ -32,21 +49,29 @@ export default function LeadDetailPage() {
   const [isAdding, setIsAdding] = useState(false);
 
   const [nextStatus, setNextStatus] = useState("");
+  const [followUpDateStr, setFollowUpDateStr] = useState("");
+  const [closeReason, setCloseReason] = useState("");
   const [statusError, setStatusError] = useState("");
   const [isChangingStatus, setIsChangingStatus] = useState(false);
+
+  // Flujo de FOLLOW_UP en dos pasos: primero se elige fecha, luego motivo.
+  // pendingFollow = { kind: "days"|"date", days?, ymd? } | null
+  const [pendingFollow, setPendingFollow] = useState(null);
+
+  const [timelineVisible, setTimelineVisible] = useState(TIMELINE_PAGE);
 
   const allowedNext = useMemo(() => {
     const current = lead?.status;
     if (!current) return [];
-    const map = {
-      NEW: ["CONTACTED"],
-      CONTACTED: ["RESPONDED"],
-      RESPONDED: ["SCHEDULED"],
-      SCHEDULED: ["CLOSED"],
-      CLOSED: []
-    };
-    return map[current] ?? [];
+    return allowedNextByStatus[current] ?? [];
   }, [lead?.status]);
+
+  const activities = lead?.activities ?? [];
+  const visibleActivities = useMemo(
+    () => activities.slice(0, timelineVisible),
+    [activities, timelineVisible]
+  );
+  const canShowMoreTimeline = activities.length > timelineVisible;
 
   useEffect(() => {
     async function load() {
@@ -56,6 +81,9 @@ export default function LeadDetailPage() {
         const data = await apiFetch(`/api/private/leads/${id}`);
         setLead(data.lead);
         setNextStatus("");
+        setCloseReason(data.lead.noInvestmentReason ?? "");
+        setPendingFollow(null);
+        setTimelineVisible(TIMELINE_PAGE);
       } catch (e) {
         setError(e.message);
       } finally {
@@ -64,6 +92,25 @@ export default function LeadDetailPage() {
     }
     load();
   }, [id]);
+
+  useEffect(() => {
+    if (nextStatus === "CLOSED_NOT_INVESTED") {
+      setCloseReason((prev) => prev || (lead?.noInvestmentReason ?? ""));
+    }
+  }, [nextStatus, lead?.noInvestmentReason]);
+
+  useEffect(() => {
+    if (nextStatus === "FOLLOW_UP") {
+      setFollowUpDateStr(minFollowUpYmd());
+      setPendingFollow(null);
+      return;
+    }
+    if (lead?.status === "FOLLOW_UP" && lead.nextActionDate) {
+      setFollowUpDateStr(toLocalYmd(lead.nextActionDate));
+    } else {
+      setFollowUpDateStr("");
+    }
+  }, [nextStatus, lead?.status, lead?.nextActionDate, lead?.id]);
 
   async function handleAddNote(e) {
     e.preventDefault();
@@ -93,6 +140,61 @@ export default function LeadDetailPage() {
     }
   }
 
+  function startPendingByDays(days) {
+    if (isChangingStatus) return;
+    setStatusError("");
+    setPendingFollow({ kind: "days", days });
+  }
+
+  function startPendingByDate() {
+    if (isChangingStatus) return;
+    if (!followUpDateStr) {
+      setStatusError("Selecciona una fecha.");
+      return;
+    }
+    if (followUpDateStr < minFollowUpYmd()) {
+      setStatusError("La fecha debe ser al menos dentro de 7 días.");
+      return;
+    }
+    setStatusError("");
+    setPendingFollow({ kind: "date", ymd: followUpDateStr });
+  }
+
+  async function confirmFollowUpWithReason(reason) {
+    if (isChangingStatus || !pendingFollow) return;
+    setStatusError("");
+    setIsChangingStatus(true);
+    try {
+      const body = { followUpReason: reason };
+      if (pendingFollow.kind === "days") body.days = pendingFollow.days;
+      else body.nextActionDate = pendingFollow.ymd;
+
+      const wasFollowUp = lead.status === "FOLLOW_UP";
+
+      const data = await apiFetch(`/api/private/leads/${id}/follow-up-quick`, {
+        method: "POST",
+        body: JSON.stringify(body)
+      });
+      setLead(data.lead);
+      setPendingFollow(null);
+      setNextStatus("");
+      setFollowUpDateStr("");
+
+      const reasonLabel = followUpReasonLabel[reason] ?? "Motivo";
+      if (wasFollowUp) {
+        toast.success(`Seguimiento actualizado · ${reasonLabel}.`);
+      } else {
+        toast.success(`Lead enviado a seguimiento · ${reasonLabel}.`);
+        navigate("/app/dashboard");
+      }
+    } catch (err) {
+      setStatusError(err.message);
+      toast.error(err.message);
+    } finally {
+      setIsChangingStatus(false);
+    }
+  }
+
   async function handleChangeStatus(e) {
     e.preventDefault();
     setStatusError("");
@@ -101,12 +203,27 @@ export default function LeadDetailPage() {
       return;
     }
 
+    // FOLLOW_UP nunca debe guardarse desde el botón "Actualizar estado":
+    // siempre pasa por el flujo de fecha + motivo (auto-guardado).
+    if (nextStatus === "FOLLOW_UP") {
+      setStatusError("Selecciona una fecha y luego el motivo para enviar a seguimiento.");
+      return;
+    }
+
+    if (nextStatus === "CLOSED_NOT_INVESTED") {
+      const reason = closeReason.trim();
+      if (!reason) {
+        setStatusError("Indica el motivo de no inversión.");
+        return;
+      }
+    }
+
     setIsChangingStatus(true);
     try {
-      const body =
-        nextStatus === "CLOSED"
-          ? { status: nextStatus, closeSubstatus: "INVESTED" }
-          : { status: nextStatus };
+      const body = { status: nextStatus };
+      if (nextStatus === "CLOSED_NOT_INVESTED") {
+        body.noInvestmentReason = closeReason.trim();
+      }
 
       const data = await apiFetch(`/api/private/leads/${id}/status`, {
         method: "PATCH",
@@ -114,153 +231,384 @@ export default function LeadDetailPage() {
       });
       setLead(data.lead);
       setNextStatus("");
+      setCloseReason(data.lead.noInvestmentReason ?? "");
+      toast.success(`Estado actualizado a "${leadStatusLabel[nextStatus] ?? nextStatus}".`);
+      navigate("/app/dashboard");
     } catch (err) {
       setStatusError(err.message);
+      toast.error(err.message);
     } finally {
       setIsChangingStatus(false);
     }
   }
 
   if (isLoading) return <p className="text-app-muted">Cargando...</p>;
-  if (error) return <p className="form-error">{error}</p>;
+  if (error) return <p className="form-error-surface">{error}</p>;
   if (!lead) return null;
+
+  const followBucket =
+    lead.status === "FOLLOW_UP" && lead.nextActionDate
+      ? followUpDueBucket(lead.nextActionDate)
+      : null;
+
+  const showFollowUpQuick =
+    nextStatus === "FOLLOW_UP" || (lead.status === "FOLLOW_UP" && !nextStatus);
+
+  const showStatusSubmit = nextStatus && nextStatus !== "FOLLOW_UP";
+  const pendingFollowLabel = pendingFollow
+    ? pendingFollow.kind === "days"
+      ? `${pendingFollow.days} días`
+      : formatDateOnly(pendingFollow.ymd)
+    : null;
+
+  const followUpCount = lead.followUpCount ?? 0;
+  const showCloseSuggestion = lead.status === "FOLLOW_UP" && followUpCount >= 2;
 
   return (
     <div className="stack-lg">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-app-muted text-sm">
-            <Link className="table-row-link" to="/app/leads">
-              Leads
-            </Link>{" "}
-            / #{lead.leadNumber}
-          </p>
-          <h2 className="truncate text-xl font-semibold text-gray-900">
-            {lead.fullName}
-          </h2>
-        </div>
-        <div className="flex items-center gap-3">
-          <StatusBadge status={lead.status} />
+      <div>
+        <Link className="lead-detail-back" to="/app/leads">
+          ← Volver a Leads
+        </Link>
+        <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <p className="lead-detail-kicker">Lead #{lead.leadNumber}</p>
+            <h2 className="page-title mt-1 max-w-2xl">{lead.fullName}</h2>
+            <div className="lead-detail-meta-row">
+              <StatusBadge status={lead.status} />
+              {lead.status === "FOLLOW_UP" && lead.followUpReason ? (
+                <span
+                  className="followup-reason-badge"
+                  title="Motivo de seguimiento"
+                >
+                  {followUpReasonLabel[lead.followUpReason] ?? "Motivo"}
+                </span>
+              ) : null}
+              {lead.status === "FOLLOW_UP" && lead.nextActionDate ? (
+                <span
+                  className={
+                    followBucket === "overdue"
+                      ? "rounded-md border border-rose-800/60 bg-rose-950/50 px-2 py-1 text-xs font-medium text-rose-200"
+                      : followBucket === "today"
+                        ? "rounded-md border border-amber-800/50 bg-amber-950/40 px-2 py-1 text-xs font-medium text-amber-100"
+                        : "rounded-md border border-slate-700 bg-slate-900/60 px-2 py-1 text-xs text-slate-300"
+                  }
+                >
+                  Seguimiento: {formatDateOnly(lead.nextActionDate)}
+                  {followBucket === "overdue" ? " · Vencido" : null}
+                  {followBucket === "today" ? " · Hoy" : null}
+                </span>
+              ) : null}
+            </div>
+          </div>
+          <Link to={`/app/leads/${id}/edit`}>
+            <Button variant="ghost-surface" type="button">
+              Editar datos
+            </Button>
+          </Link>
         </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-1 stack-lg">
-          <Card
-            variant="surface"
-            title="Datos"
-            subtitle="Información básica del lead."
-          >
+        <div className="stack-lg lg:col-span-1">
+          <Card variant="surface" title="Datos" subtitle="Información del lead.">
             <div className="stack-md">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  Teléfono
-                </p>
-                <p className="text-sm text-gray-900">{lead.phone}</p>
+                <p className="page-label">Teléfono</p>
+                <p className="page-value">{lead.phone}</p>
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  Email
-                </p>
-                <p className="text-sm text-gray-900">{lead.email ?? "-"}</p>
+                <p className="page-label">Email</p>
+                <p className="page-value">{lead.email ?? "—"}</p>
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  Fuente
-                </p>
-                <p className="text-sm text-gray-900">{lead.source}</p>
+                <p className="page-label">Fuente</p>
+                <p className="page-value">{displayLeadSource(lead.source)}</p>
               </div>
+              {lead.referredByLead ? (
+                <div>
+                  <p className="page-label">Referido por (lead)</p>
+                  <Link className="table-row-link text-sm" to={`/app/leads/${lead.referredByLead.id}`}>
+                    Lead #{lead.referredByLead.leadNumber} · {lead.referredByLead.fullName} ·{" "}
+                    {lead.referredByLead.phone}
+                  </Link>
+                </div>
+              ) : null}
+              {lead.referredBy ? (
+                <div>
+                  <p className="page-label">Referido por (texto)</p>
+                  <p className="page-value">{lead.referredBy}</p>
+                </div>
+              ) : null}
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  Última actividad
-                </p>
-                <p className="text-sm text-gray-900">
-                  {formatDate(lead.lastActivityAt)}
-                </p>
+                <p className="page-label">Estado en pipeline</p>
+                <p className="page-value">{leadStatusLabel[lead.status] ?? lead.status}</p>
               </div>
+              {lead.status === "FOLLOW_UP" && lead.followUpReason ? (
+                <div>
+                  <p className="page-label">Motivo de seguimiento</p>
+                  <p className="page-value">
+                    {followUpReasonLabel[lead.followUpReason] ?? lead.followUpReason}
+                  </p>
+                </div>
+              ) : null}
+              {lead.noInvestmentReason ? (
+                <div>
+                  <p className="page-label">Motivo (no inversión)</p>
+                  <p className="page-value">{lead.noInvestmentReason}</p>
+                </div>
+              ) : null}
+              {lead.observations ? (
+                <div>
+                  <p className="page-label">Observaciones</p>
+                  <p className="page-value whitespace-pre-wrap">{lead.observations}</p>
+                </div>
+              ) : null}
+              <div>
+                <p className="page-label">Última actividad</p>
+                <p className="page-value">{formatDate(lead.lastActivityAt)}</p>
+              </div>
+              {lead.status === "FOLLOW_UP" && lead.nextActionDate ? (
+                <div
+                  className={
+                    followBucket === "overdue"
+                      ? "rounded-lg border border-rose-800/60 bg-rose-950/40 p-3"
+                      : followBucket === "today"
+                        ? "rounded-lg border border-amber-800/50 bg-amber-950/30 p-3"
+                        : "rounded-lg border border-slate-700 bg-slate-950/50 p-3"
+                  }
+                >
+                  <p className="page-label">Próximo seguimiento</p>
+                  <p className="mt-1 text-base font-semibold text-slate-100">
+                    {formatDateOnly(lead.nextActionDate)}
+                  </p>
+                  {followBucket === "overdue" ? (
+                    <p className="mt-1 text-sm font-medium text-rose-300">Vencido: ya debió contactarse.</p>
+                  ) : null}
+                  {followBucket === "today" ? (
+                    <p className="mt-1 text-sm font-medium text-amber-200">Pendiente para hoy.</p>
+                  ) : null}
+                  {followBucket === "upcoming" ? (
+                    <p className="mt-1 text-sm text-slate-400">Aún dentro del plazo programado.</p>
+                  ) : null}
+                </div>
+              ) : lead.nextActionDate ? (
+                <div>
+                  <p className="page-label">Próxima acción</p>
+                  <p className="page-value">{formatDateOnly(lead.nextActionDate)}</p>
+                </div>
+              ) : null}
             </div>
           </Card>
 
-          <Card
-            variant="surface"
-            title="Acciones"
-            subtitle="Avanza el lead en el pipeline."
-          >
+          <Card variant="surface" title="Pipeline" subtitle="Avanza el estado del lead.">
+            {showCloseSuggestion ? (
+              <div className="mb-3 rounded-lg border border-rose-800/50 bg-rose-950/30 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-rose-200">
+                  Sugerencia operativa
+                </p>
+                <p className="mt-1 text-sm text-rose-100">
+                  Este lead ha estado {followUpCount} veces en seguimiento.
+                  ¿Desea cerrarlo como No invirtió?
+                </p>
+                <div className="mt-2">
+                  <Button
+                    type="button"
+                    variant="ghost-surface"
+                    className="!h-9 text-xs"
+                    onClick={() => {
+                      setPendingFollow(null);
+                      setNextStatus("CLOSED_NOT_INVESTED");
+                    }}
+                  >
+                    Cerrar sin invertir
+                  </Button>
+                </div>
+              </div>
+            ) : null}
             <form className="stack-md" onSubmit={handleChangeStatus}>
-              <div className="form-control">
-                <span className="text-sm text-gray-700">Siguiente estado</span>
+              <label className="form-control">
+                <span className="form-label-surface">Siguiente estado</span>
                 <select
-                  className="h-11 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-900 outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
+                  className="input-surface h-11"
                   value={nextStatus}
-                  onChange={(e) => setNextStatus(e.target.value)}
+                  onChange={(event) => {
+                    setNextStatus(event.target.value);
+                    setPendingFollow(null);
+                  }}
                   disabled={allowedNext.length === 0}
                 >
                   <option value="">Selecciona…</option>
                   {allowedNext.map((st) => (
                     <option key={st} value={st}>
-                      {st}
+                      {leadStatusLabel[st] ?? "Estado"}
                     </option>
                   ))}
                 </select>
-              </div>
-              {statusError ? <p className="form-error">{statusError}</p> : null}
-              <Button disabled={isChangingStatus || allowedNext.length === 0} type="submit">
-                {isChangingStatus ? "Actualizando..." : "Cambiar estado"}
-              </Button>
+              </label>
+
+              {showFollowUpQuick ? (
+                <div className="stack-md rounded-lg border border-amber-700/60 bg-amber-950/30 p-3">
+                  {!pendingFollow ? (
+                    <>
+                      <p className="text-xs font-medium text-amber-200">
+                        Paso 1 · Elige cuándo retomar el lead (mínimo 7 días, solo fecha).
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {[7, 15, 30, 90].map((d) => (
+                          <Button
+                            key={d}
+                            type="button"
+                            variant="ghost-surface"
+                            className="!h-9 min-w-[4.5rem] px-2 text-xs"
+                            disabled={isChangingStatus}
+                            onClick={() => startPendingByDays(d)}
+                          >
+                            {d} días
+                          </Button>
+                        ))}
+                      </div>
+                      <label className="form-control">
+                        <span className="form-label-surface">Fecha personalizada</span>
+                        <div className="flex flex-wrap items-end gap-2">
+                          <input
+                            className="input-surface h-11 min-w-[10rem] flex-1"
+                            type="date"
+                            min={minFollowUpYmd()}
+                            value={followUpDateStr}
+                            onChange={(event) => setFollowUpDateStr(event.target.value)}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost-surface"
+                            className="!h-9 shrink-0"
+                            disabled={isChangingStatus}
+                            onClick={startPendingByDate}
+                          >
+                            Usar fecha
+                          </Button>
+                        </div>
+                      </label>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs font-medium text-amber-200">
+                          Paso 2 · Indica el motivo para retomar en {pendingFollowLabel}.
+                        </p>
+                        <button
+                          type="button"
+                          className="text-xs text-amber-200 underline-offset-2 hover:underline"
+                          onClick={() => setPendingFollow(null)}
+                          disabled={isChangingStatus}
+                        >
+                          Cambiar fecha
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        {followUpReasonOptions.map((opt) => (
+                          <Button
+                            key={opt.value}
+                            type="button"
+                            variant="ghost-surface"
+                            className="!h-10 px-2 text-xs"
+                            disabled={isChangingStatus}
+                            onClick={() => confirmFollowUpWithReason(opt.value)}
+                          >
+                            {opt.label}
+                          </Button>
+                        ))}
+                      </div>
+                      {isChangingStatus ? (
+                        <p className="text-xs text-amber-200">Guardando…</p>
+                      ) : null}
+                    </>
+                  )}
+                </div>
+              ) : null}
+
+              {nextStatus === "CLOSED_NOT_INVESTED" ? (
+                <label className="form-control">
+                  <span className="form-label-surface">Motivo de no inversión</span>
+                  <textarea
+                    className="textarea-surface"
+                    value={closeReason}
+                    onChange={(event) => setCloseReason(event.target.value)}
+                    placeholder="Ej. falta de liquidez, timing, etc."
+                    rows={3}
+                  />
+                </label>
+              ) : null}
+
+              {statusError ? <p className="form-error-surface">{statusError}</p> : null}
+
+              {showStatusSubmit ? (
+                <Button disabled={isChangingStatus || allowedNext.length === 0} type="submit">
+                  {isChangingStatus ? "Actualizando…" : "Actualizar estado"}
+                </Button>
+              ) : null}
+
               {allowedNext.length === 0 ? (
-                <p className="text-app-muted text-xs">
-                  No hay más transiciones disponibles.
-                </p>
+                <p className="text-app-muted text-xs">No hay más transiciones desde este estado.</p>
               ) : null}
             </form>
           </Card>
         </div>
 
-        <div className="lg:col-span-2 stack-lg">
-          <Card
-            variant="surface"
-            title="Timeline"
-            subtitle="Actividades y notas registradas."
-          >
+        <div className="stack-lg lg:col-span-2">
+          <Card variant="surface" title="Actividad" subtitle="Notas y bitácora del lead.">
             <form className="stack-md" onSubmit={handleAddNote}>
-              <div className="form-control">
-                <span className="text-sm text-gray-700">Agregar nota</span>
+              <label className="form-control">
+                <span className="form-label-surface">Nueva nota</span>
                 <textarea
-                  className="min-h-[96px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
+                  className="textarea-surface"
                   value={newNote}
-                  onChange={(e) => setNewNote(e.target.value)}
-                  placeholder="Escribe una nota para el seguimiento..."
+                  onChange={(event) => setNewNote(event.target.value)}
+                  placeholder="Escribe una nota para el seguimiento…"
+                  rows={4}
                 />
-              </div>
-              {noteError ? <p className="form-error">{noteError}</p> : null}
-              <div className="flex gap-3">
-                <Button disabled={isAdding} type="submit">
-                  {isAdding ? "Guardando..." : "Guardar nota"}
-                </Button>
-              </div>
+              </label>
+              {noteError ? <p className="form-error-surface">{noteError}</p> : null}
+              <Button disabled={isAdding} type="submit">
+                {isAdding ? "Guardando…" : "Guardar nota"}
+              </Button>
             </form>
           </Card>
 
-          <div className="timeline">
-            {lead.activities?.map((activity) => (
-              <article key={activity.id} className="timeline-item">
-                <div className="timeline-meta">
-                  <span>
-                    {activityLabels[activity.type] ?? activity.type}
-                    {activity.user?.name ? ` · ${activity.user.name}` : ""}
-                  </span>
-                  <span>{formatDate(activity.createdAt)}</span>
-                </div>
-                <p className="timeline-title">{activity.description}</p>
-              </article>
-            ))}
-            {lead.activities?.length === 0 ? (
-              <p className="text-app-muted">Sin actividades aún.</p>
-            ) : null}
+          <div>
+            <h3 className="page-heading mb-3">Línea de tiempo</h3>
+            <div className="timeline">
+              {visibleActivities.map((activity) => (
+                <article key={activity.id} className="timeline-item">
+                  <div className="timeline-meta">
+                    <span>
+                      <span className="timeline-type">
+                        {activityTypeLabel[activity.type] ?? "Actividad"}
+                      </span>
+                      {activity.user?.name ? ` · ${activity.user.name}` : ""}
+                    </span>
+                    <span>{formatDate(activity.createdAt)}</span>
+                  </div>
+                  <p className="timeline-title">{formatActivityDescription(activity)}</p>
+                </article>
+              ))}
+              {activities.length === 0 ? (
+                <p className="text-app-muted">Sin actividades aún.</p>
+              ) : null}
+              {canShowMoreTimeline ? (
+                <Button
+                  type="button"
+                  variant="ghost-surface"
+                  className="mt-2"
+                  onClick={() => setTimelineVisible((n) => n + TIMELINE_PAGE)}
+                >
+                  Ver más
+                </Button>
+              ) : null}
+            </div>
           </div>
         </div>
       </div>
     </div>
   );
 }
-

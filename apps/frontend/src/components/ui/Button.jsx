@@ -4,10 +4,10 @@ const variantClasses = {
   "ghost-surface": "btn btn-ghost-surface"
 };
 
-export default function Button({ children, variant = "primary", ...props }) {
+export default function Button({ children, variant = "primary", className = "", ...props }) {
   const variantClass = variantClasses[variant] ?? variantClasses.primary;
   return (
-    <button className={variantClass} {...props}>
+    <button className={`${variantClass} ${className}`.trim()} {...props}>
       {children}
     </button>
   );

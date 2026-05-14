@@ -1,9 +1,9 @@
 import {
   PrismaClient,
   ActivityType,
+  FollowUpReason,
   LeadSource,
   LeadStatus,
-  CloseSubstatus,
   Role
 } from "@prisma/client";
 
@@ -11,8 +11,8 @@ export const prisma = new PrismaClient();
 
 export {
   ActivityType,
+  FollowUpReason,
   LeadSource,
   LeadStatus,
-  CloseSubstatus,
   Role
 };

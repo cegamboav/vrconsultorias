@@ -1,12 +1,40 @@
-import { prisma, ActivityType, LeadSource, LeadStatus } from "@crm/database";
+import {
+  prisma,
+  ActivityType,
+  FollowUpReason,
+  LeadSource,
+  LeadStatus
+} from "@crm/database";
 import { AppError } from "../utils/app-error.js";
+import {
+  followUpReasonLabelEs,
+  formatStatusChangeDescription
+} from "../constants/lead-copy.es.js";
+import {
+  assertMinSevenDaysFollowUp,
+  followUpDateAfterCalendarDays,
+  formatSpanishDayMonthYear,
+  parseDateInputToStartOfDay,
+  startOfLocalDay,
+  toYmdLocal
+} from "../utils/follow-up-date.js";
 
 const allowedTransitions = {
   NEW: ["CONTACTED"],
-  CONTACTED: ["RESPONDED"],
-  RESPONDED: ["SCHEDULED"],
-  SCHEDULED: ["CLOSED"],
-  CLOSED: []
+  CONTACTED: ["SCHEDULED", "FOLLOW_UP"],
+  SCHEDULED: ["CLOSED_INVESTED", "CLOSED_NOT_INVESTED", "FOLLOW_UP"],
+  // El asesor puede cerrar manualmente un lead que está en seguimiento
+  // (típicamente después de varios intentos sin respuesta).
+  FOLLOW_UP: ["CONTACTED", "SCHEDULED", "CLOSED_INVESTED", "CLOSED_NOT_INVESTED"],
+  CLOSED_INVESTED: [],
+  CLOSED_NOT_INVESTED: ["FOLLOW_UP", "CONTACTED", "SCHEDULED"]
+};
+
+const legacySourceMap = {
+  REFERRAL: "REFERIDO",
+  DIRECT: "DIRECTO",
+  ORGANIC: "PAGINA_WEB",
+  OTHER: "OTRO"
 };
 
 function ensureLeadExists(lead) {
@@ -14,24 +42,73 @@ function ensureLeadExists(lead) {
 }
 
 function normalizeSource(source) {
-  if (!source) return LeadSource.OTHER;
-  if (!Object.prototype.hasOwnProperty.call(LeadSource, source)) return LeadSource.OTHER;
-  return source;
+  if (!source) return LeadSource.OTRO;
+  if (Object.prototype.hasOwnProperty.call(LeadSource, source)) {
+    return LeadSource[source];
+  }
+  const legacy = legacySourceMap[source];
+  if (legacy && Object.prototype.hasOwnProperty.call(LeadSource, legacy)) {
+    return LeadSource[legacy];
+  }
+  return LeadSource.OTRO;
 }
 
 function validateStatusTransition(currentStatus, nextStatus) {
   const allowed = allowedTransitions[currentStatus] ?? [];
   if (!allowed.includes(nextStatus)) {
-    throw new AppError(
-      `Transición inválida: ${currentStatus} → ${nextStatus}.`,
-      400
-    );
+    throw new AppError("Transición no permitida entre estados.", 400);
   }
+}
+
+function isClosedStatus(status) {
+  return status === LeadStatus.CLOSED_INVESTED || status === LeadStatus.CLOSED_NOT_INVESTED;
+}
+
+function normalizeFollowUpReason(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const key = String(value).trim().toUpperCase();
+  if (!Object.prototype.hasOwnProperty.call(FollowUpReason, key)) {
+    throw new AppError("Motivo de seguimiento no válido.", 400);
+  }
+  return FollowUpReason[key];
+}
+
+async function assertReferrerLeadValid(referrerId, currentLeadId) {
+  if (!referrerId) return;
+  if (referrerId === currentLeadId) {
+    throw new AppError("Un lead no puede referirse a sí mismo.", 400);
+  }
+  const other = await prisma.lead.findUnique({
+    where: { id: referrerId },
+    select: { id: true }
+  });
+  if (!other) {
+    throw new AppError("El lead referidor no existe.", 400);
+  }
+}
+
+// Orden operativo: del más activo / accionable arriba, al cerrado abajo.
+const statusPriority = {
+  NEW: 1,
+  CONTACTED: 2,
+  SCHEDULED: 3,
+  FOLLOW_UP: 4,
+  CLOSED_INVESTED: 5,
+  CLOSED_NOT_INVESTED: 6
+};
+
+function compareLeadsForBandeja(a, b) {
+  const pa = statusPriority[a.status] ?? 99;
+  const pb = statusPriority[b.status] ?? 99;
+  if (pa !== pb) return pa - pb;
+
+  const aTs = a.lastActivityAt ? new Date(a.lastActivityAt).getTime() : 0;
+  const bTs = b.lastActivityAt ? new Date(b.lastActivityAt).getTime() : 0;
+  return bTs - aTs; // DESC dentro del grupo
 }
 
 export async function listLeads() {
   const leads = await prisma.lead.findMany({
-    orderBy: { updatedAt: "desc" },
     select: {
       id: true,
       leadNumber: true,
@@ -40,6 +117,8 @@ export async function listLeads() {
       email: true,
       source: true,
       status: true,
+      followUpReason: true,
+      followUpCount: true,
       nextActionDate: true,
       lastActivityAt: true,
       createdAt: true,
@@ -47,19 +126,53 @@ export async function listLeads() {
     }
   });
 
-  return leads;
+  return leads.sort(compareLeadsForBandeja);
+}
+
+export async function searchLeadsForReferrer({ query, excludeLeadId }) {
+  const q = String(query ?? "").trim();
+  if (q.length < 2) {
+    return [];
+  }
+
+  return prisma.lead.findMany({
+    where: {
+      ...(excludeLeadId ? { id: { not: excludeLeadId } } : {}),
+      OR: [
+        { fullName: { contains: q, mode: "insensitive" } },
+        { phone: { contains: q } }
+      ]
+    },
+    take: 15,
+    orderBy: { updatedAt: "desc" },
+    select: {
+      id: true,
+      leadNumber: true,
+      fullName: true,
+      phone: true
+    }
+  });
 }
 
 export async function createLead({ userId, payload }) {
-  const { fullName, phone, email, source, referredBy, observations } = payload;
+  const {
+    fullName,
+    phone,
+    email,
+    source,
+    referredBy,
+    referredByLeadId,
+    observations,
+    nextActionDate
+  } = payload;
 
   if (!fullName || !phone) {
-    throw new AppError("fullName y phone son requeridos.", 400);
+    throw new AppError("El nombre y el teléfono son obligatorios.", 400);
   }
 
   const trimmedPhone = String(phone).trim();
   if (!trimmedPhone) {
-    throw new AppError("phone inválido.", 400);
+    throw new AppError("Teléfono no válido.", 400);
   }
 
   const existing = await prisma.lead.findFirst({ where: { phone: trimmedPhone } });
@@ -67,7 +180,24 @@ export async function createLead({ userId, payload }) {
     throw new AppError("Este contacto ya existe.", 409);
   }
 
+  const refId =
+    referredByLeadId === undefined || referredByLeadId === null || referredByLeadId === ""
+      ? null
+      : String(referredByLeadId).trim();
+  if (refId) {
+    await assertReferrerLeadValid(refId, null);
+  }
+
   const now = new Date();
+
+  let parsedNextAction = null;
+  if (nextActionDate !== undefined && nextActionDate !== null && nextActionDate !== "") {
+    const parsed = parseDateInputToStartOfDay(nextActionDate);
+    if (!parsed) {
+      throw new AppError("Fecha de próxima acción no válida.", 400);
+    }
+    parsedNextAction = parsed;
+  }
 
   const lead = await prisma.lead.create({
     data: {
@@ -76,7 +206,9 @@ export async function createLead({ userId, payload }) {
       email: email ? String(email).trim().toLowerCase() : null,
       source: normalizeSource(source),
       referredBy: referredBy ? String(referredBy).trim() : null,
+      referredByLeadId: refId,
       observations: observations ? String(observations).trim() : null,
+      nextActionDate: parsedNextAction,
       status: LeadStatus.NEW,
       ownerId: userId,
       lastActivityAt: now,
@@ -84,10 +216,8 @@ export async function createLead({ userId, payload }) {
         create: {
           userId,
           type: ActivityType.LEAD_CREATED,
-          description: "Lead creado",
-          metadata: {
-            status: "NEW"
-          }
+          description: "Lead registrado en el sistema.",
+          metadata: { status: LeadStatus.NEW }
         }
       }
     },
@@ -99,7 +229,10 @@ export async function createLead({ userId, payload }) {
       email: true,
       source: true,
       referredBy: true,
+      referredByLeadId: true,
+      observations: true,
       status: true,
+      nextActionDate: true,
       lastActivityAt: true,
       createdAt: true
     }
@@ -108,13 +241,161 @@ export async function createLead({ userId, payload }) {
   return lead;
 }
 
+export async function updateLead({ leadId, userId, payload }) {
+  const lead = await prisma.lead.findUnique({ where: { id: leadId } });
+  ensureLeadExists(lead);
+
+  const nextRefId =
+    payload.referredByLeadId === undefined
+      ? lead.referredByLeadId
+      : payload.referredByLeadId === null || payload.referredByLeadId === ""
+        ? null
+        : String(payload.referredByLeadId).trim();
+  if (nextRefId) {
+    await assertReferrerLeadValid(nextRefId, leadId);
+  }
+
+  const next = {
+    fullName:
+      payload.fullName !== undefined
+        ? String(payload.fullName).trim()
+        : lead.fullName,
+    email:
+      payload.email !== undefined
+        ? payload.email === null || payload.email === ""
+          ? null
+          : String(payload.email).trim().toLowerCase()
+        : lead.email,
+    source:
+      payload.source !== undefined ? normalizeSource(payload.source) : lead.source,
+    referredBy:
+      payload.referredBy !== undefined
+        ? payload.referredBy === null || payload.referredBy === ""
+          ? null
+          : String(payload.referredBy).trim()
+        : lead.referredBy,
+    referredByLeadId: nextRefId,
+    observations:
+      payload.observations !== undefined
+        ? payload.observations === null || payload.observations === ""
+          ? null
+          : String(payload.observations).trim()
+        : lead.observations,
+    nextActionDate: (() => {
+      if (payload.nextActionDate === undefined) return lead.nextActionDate;
+      if (payload.nextActionDate === null || payload.nextActionDate === "") return null;
+      const parsed = parseDateInputToStartOfDay(payload.nextActionDate);
+      if (!parsed) {
+        throw new AppError("Fecha de próxima acción no válida.", 400);
+      }
+      return parsed;
+    })()
+  };
+
+  if (payload.phone !== undefined && String(payload.phone).trim() !== lead.phone) {
+    throw new AppError("El teléfono no se puede modificar (identificador único del lead).", 400);
+  }
+
+  if (lead.status === LeadStatus.FOLLOW_UP) {
+    if (!next.nextActionDate) {
+      throw new AppError(
+        "En seguimiento es obligatoria la próxima fecha de contacto (solo fecha).",
+        400
+      );
+    }
+    const changingDate =
+      payload.nextActionDate !== undefined &&
+      payload.nextActionDate !== null &&
+      payload.nextActionDate !== "";
+    if (changingDate) {
+      assertMinSevenDaysFollowUp(startOfLocalDay(next.nextActionDate));
+    }
+  }
+
+  const parts = [];
+  if (next.fullName !== lead.fullName) {
+    parts.push("Nombre del contacto actualizado");
+  }
+  if (next.email !== lead.email) {
+    parts.push("Correo electrónico actualizado");
+  }
+  if (next.source !== lead.source) {
+    parts.push("Fuente del lead actualizada");
+  }
+  if (next.referredBy !== lead.referredBy) {
+    parts.push("Texto de referido actualizado");
+  }
+  if (next.referredByLeadId !== lead.referredByLeadId) {
+    parts.push(
+      next.referredByLeadId ? "Referidor vinculado a otro lead" : "Referidor desvinculado"
+    );
+  }
+  if (next.observations !== lead.observations) {
+    parts.push("Observaciones actualizadas");
+  }
+  const prevNa = lead.nextActionDate ? lead.nextActionDate.toISOString() : null;
+  const nextNa = next.nextActionDate ? next.nextActionDate.toISOString() : null;
+  if (prevNa !== nextNa) {
+    parts.push("Fecha de próximo seguimiento ajustada");
+  }
+
+  if (parts.length === 0) {
+    return await getLeadById(leadId);
+  }
+
+  const now = new Date();
+  const description = `Se actualizó la ficha: ${parts.join(". ")}.`;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.lead.update({
+      where: { id: leadId },
+      data: {
+        fullName: next.fullName,
+        email: next.email,
+        source: next.source,
+        referredBy: next.referredBy,
+        referredByLeadId: next.referredByLeadId,
+        observations: next.observations,
+        nextActionDate: next.nextActionDate,
+        lastActivityAt: now
+      }
+    });
+
+    await tx.activity.create({
+      data: {
+        leadId,
+        userId,
+        type: ActivityType.LEAD_UPDATED,
+        description,
+        metadata: {
+          fields: [
+            "fullName",
+            "email",
+            "source",
+            "referredBy",
+            "referredByLeadId",
+            "observations",
+            "nextActionDate"
+          ]
+        }
+      }
+    });
+  });
+
+  return await getLeadById(leadId);
+}
+
 export async function getLeadById(id) {
   const lead = await prisma.lead.findUnique({
     where: { id },
     include: {
       owner: { select: { id: true, name: true, email: true, role: true } },
+      referredByLead: {
+        select: { id: true, leadNumber: true, fullName: true, phone: true }
+      },
       activities: {
         orderBy: { createdAt: "desc" },
+        take: 200,
         include: { user: { select: { id: true, name: true, email: true } } }
       }
     }
@@ -125,11 +406,16 @@ export async function getLeadById(id) {
 }
 
 export async function changeLeadStatus({ leadId, userId, payload }) {
-  const { status, closeSubstatus, noInvestmentReason } = payload;
+  const {
+    status,
+    noInvestmentReason,
+    nextActionDate: nextActionRaw,
+    followUpReason: followUpReasonRaw
+  } = payload;
 
-  if (!status) throw new AppError("status es requerido.", 400);
+  if (!status) throw new AppError("El estado es obligatorio.", 400);
   if (!Object.prototype.hasOwnProperty.call(LeadStatus, status)) {
-    throw new AppError("status inválido.", 400);
+    throw new AppError("Estado no válido.", 400);
   }
 
   const lead = await prisma.lead.findUnique({ where: { id: leadId } });
@@ -141,28 +427,88 @@ export async function changeLeadStatus({ leadId, userId, payload }) {
 
   validateStatusTransition(lead.status, status);
 
-  const closing = status === LeadStatus.CLOSED;
-  if (closing && !closeSubstatus) {
-    throw new AppError("closeSubstatus es requerido para cerrar un lead.", 400);
+  if (status === LeadStatus.CLOSED_NOT_INVESTED) {
+    const reason = noInvestmentReason ? String(noInvestmentReason).trim() : "";
+    if (!reason) {
+      throw new AppError("Debes indicar el motivo cuando el lead cierra sin inversión.", 400);
+    }
   }
 
-  const notInvested =
-    closeSubstatus === "NOT_INVESTED_TEMPORARY" || closeSubstatus === "NOT_INVESTED_FINAL";
-  if (closing && notInvested && !noInvestmentReason) {
-    throw new AppError("noInvestmentReason es requerido si no invirtió.", 400);
+  let followUpDate = null;
+  let followUpReasonValue = null;
+  if (status === LeadStatus.FOLLOW_UP) {
+    if (!nextActionRaw) {
+      throw new AppError(
+        "Para seguimiento debes indicar la próxima fecha (solo día, al menos dentro de 7 días).",
+        400
+      );
+    }
+    followUpDate = parseDateInputToStartOfDay(nextActionRaw);
+    if (!followUpDate) {
+      throw new AppError("La fecha de seguimiento no es válida.", 400);
+    }
+    assertMinSevenDaysFollowUp(followUpDate);
+
+    followUpReasonValue = normalizeFollowUpReason(followUpReasonRaw);
+    if (!followUpReasonValue) {
+      throw new AppError("Selecciona el motivo del seguimiento.", 400);
+    }
   }
+
+  let nextActionForLead = lead.nextActionDate;
+  if (status === LeadStatus.FOLLOW_UP) {
+    nextActionForLead = followUpDate;
+  } else if (isClosedStatus(status) || lead.status === LeadStatus.FOLLOW_UP) {
+    nextActionForLead = null;
+  }
+
+  // Limpiar motivo de seguimiento cuando el lead sale de FOLLOW_UP.
+  const nextFollowUpReason =
+    status === LeadStatus.FOLLOW_UP ? followUpReasonValue : null;
 
   const now = new Date();
+
+  let nextClosedAt = lead.closedAt;
+  if (isClosedStatus(status)) {
+    nextClosedAt = now;
+  } else if (isClosedStatus(lead.status)) {
+    nextClosedAt = null;
+  }
+
+  let nextNoReason = lead.noInvestmentReason;
+  if (status === LeadStatus.CLOSED_NOT_INVESTED) {
+    nextNoReason = String(noInvestmentReason).trim();
+  } else if (status === LeadStatus.CLOSED_INVESTED) {
+    nextNoReason = null;
+  }
+
+  const enteringFollowUp = status === LeadStatus.FOLLOW_UP;
+  const nextFollowUpCount = enteringFollowUp
+    ? (lead.followUpCount ?? 0) + 1
+    : lead.followUpCount ?? 0;
+
+  let statusDescription = formatStatusChangeDescription(lead.status, status);
+  if (enteringFollowUp && followUpDate) {
+    const human = formatSpanishDayMonthYear(followUpDate);
+    const reasonLabel = followUpReasonLabelEs[followUpReasonValue] ?? "Motivo";
+    statusDescription =
+      `Lead enviado a seguimiento (#${nextFollowUpCount}) · ${reasonLabel}.\n` +
+      `Próximo contacto programado para el ${human}.`;
+  } else if (lead.status === LeadStatus.FOLLOW_UP) {
+    statusDescription = `Lead reactivado desde seguimiento.\n${statusDescription}`;
+  }
 
   await prisma.$transaction(async (tx) => {
     await tx.lead.update({
       where: { id: leadId },
       data: {
         status,
-        closeSubstatus: closing ? closeSubstatus : null,
-        noInvestmentReason: closing ? (notInvested ? noInvestmentReason : null) : null,
-        closedAt: closing ? now : null,
-        lastActivityAt: now
+        closedAt: nextClosedAt,
+        noInvestmentReason: nextNoReason,
+        followUpReason: nextFollowUpReason,
+        followUpCount: nextFollowUpCount,
+        lastActivityAt: now,
+        nextActionDate: nextActionForLead
       }
     });
 
@@ -171,11 +517,17 @@ export async function changeLeadStatus({ leadId, userId, payload }) {
         leadId,
         userId,
         type: ActivityType.STATUS_CHANGED,
-        description: `Cambio de estado: ${lead.status} → ${status}`,
+        description: statusDescription,
         metadata: {
           from: lead.status,
           to: status,
-          closeSubstatus: closing ? closeSubstatus : null
+          ...(enteringFollowUp && followUpDate
+            ? {
+                nextActionDate: followUpDate.toISOString(),
+                followUpReason: followUpReasonValue,
+                followUpCount: nextFollowUpCount
+              }
+            : {})
         }
       }
     });
@@ -184,15 +536,104 @@ export async function changeLeadStatus({ leadId, userId, payload }) {
   return await getLeadById(leadId);
 }
 
+const quickFollowUpDays = new Set([7, 15, 30, 90]);
+
+export async function applyFollowUpQuick({
+  leadId,
+  userId,
+  days,
+  nextActionDate: ymdCustom,
+  followUpReason: followUpReasonRaw
+}) {
+  let target;
+  if (ymdCustom !== undefined && ymdCustom !== null && String(ymdCustom).trim() !== "") {
+    target = parseDateInputToStartOfDay(ymdCustom);
+    if (!target) {
+      throw new AppError("La fecha de seguimiento no es válida.", 400);
+    }
+    assertMinSevenDaysFollowUp(target);
+  } else {
+    const n = Number(days);
+    if (!quickFollowUpDays.has(n)) {
+      throw new AppError("Indica 7, 15, 30 o 90 días, o una fecha personalizada.", 400);
+    }
+    target = followUpDateAfterCalendarDays(n);
+    assertMinSevenDaysFollowUp(target);
+  }
+
+  const ymd = toYmdLocal(target);
+
+  const lead = await prisma.lead.findUnique({ where: { id: leadId } });
+  ensureLeadExists(lead);
+
+  const reasonValue = normalizeFollowUpReason(followUpReasonRaw);
+
+  if (lead.status === LeadStatus.FOLLOW_UP) {
+    if (!reasonValue) {
+      throw new AppError("Selecciona el motivo del seguimiento.", 400);
+    }
+    const prevIso = lead.nextActionDate ? startOfLocalDay(lead.nextActionDate).toISOString() : null;
+    const nextIso = target.toISOString();
+    const sameDate = prevIso === nextIso;
+    const sameReason = lead.followUpReason === reasonValue;
+    if (sameDate && sameReason) {
+      return getLeadById(leadId);
+    }
+    const human = formatSpanishDayMonthYear(target);
+    const reasonLabel = followUpReasonLabelEs[reasonValue] ?? "Motivo";
+    const count = lead.followUpCount ?? 0;
+    const tag = count > 0 ? ` (#${count})` : "";
+    const description = sameDate
+      ? `Motivo de seguimiento actualizado${tag} · ${reasonLabel}.`
+      : `Seguimiento reprogramado${tag} para el ${human} · ${reasonLabel}.`;
+    const now = new Date();
+    await prisma.$transaction(async (tx) => {
+      await tx.lead.update({
+        where: { id: leadId },
+        data: {
+          nextActionDate: target,
+          followUpReason: reasonValue,
+          lastActivityAt: now
+        }
+      });
+      await tx.activity.create({
+        data: {
+          leadId,
+          userId,
+          type: ActivityType.LEAD_UPDATED,
+          description,
+          metadata: {
+            action: "FOLLOW_UP_RESCHEDULE",
+            nextActionDate: target.toISOString(),
+            followUpReason: reasonValue
+          }
+        }
+      });
+    });
+    return getLeadById(leadId);
+  }
+
+  validateStatusTransition(lead.status, LeadStatus.FOLLOW_UP);
+  return changeLeadStatus({
+    leadId,
+    userId,
+    payload: {
+      status: LeadStatus.FOLLOW_UP,
+      nextActionDate: ymd,
+      followUpReason: reasonValue
+    }
+  });
+}
+
 export async function addLeadActivity({ leadId, userId, payload }) {
   const { type, description, metadata } = payload;
 
   if (!type || !description) {
-    throw new AppError("type y description son requeridos.", 400);
+    throw new AppError("El tipo y la descripción son obligatorios.", 400);
   }
 
   if (!Object.prototype.hasOwnProperty.call(ActivityType, type)) {
-    throw new AppError("type inválido.", 400);
+    throw new AppError("Tipo de actividad no válido.", 400);
   }
 
   const lead = await prisma.lead.findUnique({ where: { id: leadId } });
@@ -222,4 +663,3 @@ export async function addLeadActivity({ leadId, userId, payload }) {
 
   return activity;
 }
-

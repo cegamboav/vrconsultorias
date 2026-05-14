@@ -122,6 +122,24 @@ Credenciales admin seed:
 - `GET /` -> informacion basica de la API
 - `GET /api/health` -> estado del servicio
 
+## Leads (API privada, requiere Bearer)
+
+Estados del pipeline (enum): `NEW`, `CONTACTED`, `RESPONDED`, `SCHEDULED`, `FOLLOW_UP`, `CLOSED_INVESTED`, `CLOSED_NOT_INVESTED`. En cierre sin inversión se exige `noInvestmentReason`.
+
+### Dashboard operativo
+
+- `GET /api/private/dashboard` — resumen para el panel (pipeline, seguimientos, cierres, actividad).
+
+Endpoints de leads:
+- `GET /api/private/leads`
+- `POST /api/private/leads`
+- `GET /api/private/leads/:id`
+- `PATCH /api/private/leads/:id` (edición de datos; registra actividad `LEAD_UPDATED`)
+- `PATCH /api/private/leads/:id/status`
+- `POST /api/private/leads/:id/activities`
+
+Tras cambiar el modelo de estados, aplica migraciones: `npm run prisma:migrate` (incluye script `20260513140000_lead_pipeline_explicit_statuses`).
+
 ## Accesos locales
 
 - Frontend: `http://localhost:5173`

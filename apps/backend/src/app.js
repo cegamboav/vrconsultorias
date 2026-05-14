@@ -7,7 +7,9 @@ import { errorHandler, notFoundHandler } from "./middlewares/error-handler.middl
 import { requireAuth } from "./middlewares/auth.middleware.js";
 import authRouter from "./routes/auth.routes.js";
 import healthRouter from "./routes/health.routes.js";
+import privateDashboardRouter from "./routes/private/dashboard.routes.js";
 import privateLeadsRouter from "./routes/private/leads.routes.js";
+import privateReportsRouter from "./routes/private/reports.routes.js";
 
 const app = express();
 
@@ -32,7 +34,9 @@ app.get("/", (_req, res) => {
 
 app.use("/api/health", healthRouter);
 app.use("/auth", authRouter);
+app.use("/api/private/dashboard", requireAuth, privateDashboardRouter);
 app.use("/api/private/leads", requireAuth, privateLeadsRouter);
+app.use("/api/private/reports", requireAuth, privateReportsRouter);
 app.get("/api/protected", requireAuth, (req, res) => {
   res.status(200).json({
     message: "Ruta protegida activa.",
