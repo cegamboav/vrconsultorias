@@ -16,7 +16,7 @@ import { findDueLeads, runOnce } from '../services/follow-up-agent.service.js';
 export const getDue = asyncHandler(async (_req, res) => {
   const leads = await findDueLeads({
     now: new Date(),
-    limit: env.followUpAgent.batchSize,
+    limit: 50,
   });
   res.status(200).json({ leads });
 });
@@ -38,7 +38,7 @@ export const postRun = asyncHandler(async (req, res) => {
 
   const limit =
     typeof req.body?.limit === 'number' && req.body.limit > 0
-      ? Math.min(req.body.limit, 200) // hard cap to prevent runaway batches
+      ? req.body.limit
       : env.followUpAgent.batchSize;
 
   const results = await runOnce({ dryRun, limit });
@@ -54,6 +54,6 @@ export const getConfig = asyncHandler(async (_req, res) => {
   res.status(200).json({
     enabled: env.followUpAgent.enabled,
     dryRun: env.followUpAgent.dryRun,
-    mode: env.followUpAgent.mode ?? 'rule-based',
+    mode: env.followUpAgent.mode,
   });
 });
