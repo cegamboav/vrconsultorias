@@ -414,6 +414,19 @@
     @apply border-rose-500 focus:border-rose-500 focus:ring-rose-500/25;
   }
 
+  .password-field-wrap {
+    @apply relative flex w-full items-stretch;
+  }
+
+  .password-field-wrap .password-field-input {
+    @apply pr-11;
+  }
+
+  .password-field-reveal {
+    @apply absolute right-1.5 top-1/2 z-10 -translate-y-1/2 select-none rounded-md p-2 text-slate-400 outline-none ring-sky-500/40 transition hover:text-slate-100 focus-visible:ring-2 active:text-sky-200 disabled:pointer-events-none disabled:opacity-40;
+    touch-action: none;
+  }
+
   .form-error {
     @apply text-sm text-rose-400;
   }
@@ -577,6 +590,22 @@
 
   .report-range-summary-value {
     @apply font-medium text-slate-200;
+  }
+
+  .settings-tabs {
+    @apply flex flex-wrap gap-2 border-b border-slate-800 pb-3;
+  }
+
+  .settings-tab {
+    @apply inline-flex h-9 items-center rounded-lg border border-transparent px-4 text-sm font-medium text-slate-400 transition hover:text-slate-200;
+  }
+
+  .settings-tab--active {
+    @apply border-slate-700/80 bg-slate-900/80 text-slate-100;
+  }
+
+  .settings-readonly-hint {
+    @apply rounded-lg border border-slate-700/60 bg-slate-900/50 px-3 py-2 text-xs text-slate-400;
   }
 
   /* Bloque de usuario en el sidebar */

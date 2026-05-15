@@ -13,7 +13,7 @@ export const list = asyncHandler(async (_req, res) => {
 });
 
 export const create = asyncHandler(async (req, res) => {
-  const user = await createUser({ payload: req.body ?? {} });
+  const user = await createUser({ payload: req.body ?? {}, actorId: req.user.id });
   res.status(201).json({ user });
 });
 
@@ -38,7 +38,8 @@ export const toggleActive = asyncHandler(async (req, res) => {
 export const resetPassword = asyncHandler(async (req, res) => {
   await resetUserPassword({
     targetId: req.params.id,
-    newPassword: req.body?.password
+    newPassword: req.body?.password,
+    actorId: req.user.id
   });
   res.status(200).json({ ok: true });
 });

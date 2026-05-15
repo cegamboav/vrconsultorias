@@ -2,7 +2,7 @@ export const APP_NAV = [
   { to: "/app/dashboard", label: "Dashboard", title: "Dashboard" },
   { to: "/app/leads", label: "Leads", title: "Leads" },
   { to: "/app/reportes", label: "Reportes", title: "Reportes" },
-  // Solo visible para ADMIN.
+  { to: "/app/configuracion", label: "Configuración", title: "Configuración" },
   { to: "/app/usuarios", label: "Usuarios", title: "Usuarios", roles: ["ADMIN"] }
 ];
 

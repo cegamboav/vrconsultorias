@@ -531,10 +531,7 @@ export async function changeLeadStatus({ leadId, userId, payload }) {
     const human = formatSpanishDayMonthYear(followUpDate);
     const reasonLabel = followUpReasonLabelEs[followUpReasonValue] ?? "Motivo";
     statusDescription =
-      `Lead enviado a seguimiento (#${nextFollowUpCount}) · ${reasonLabel}.\n` +
-      `Próximo contacto programado para el ${human}.`;
-  } else if (lead.status === LeadStatus.FOLLOW_UP) {
-    statusDescription = `Lead reactivado desde seguimiento.\n${statusDescription}`;
+      `${statusDescription}\nMotivo: ${reasonLabel}. Próximo contacto: ${human}.`;
   }
 
   await prisma.$transaction(async (tx) => {

@@ -13,7 +13,7 @@ export async function requireAuth(req, res, next) {
     const decoded = verifyAccessToken(token);
     const user = await prisma.user.findUnique({
       where: { id: decoded.sub },
-      select: { id: true, name: true, email: true, role: true, isActive: true }
+      select: { id: true, name: true, email: true, phone: true, role: true, isActive: true }
     });
 
     if (!user) {

@@ -48,14 +48,23 @@ export function AuthProvider({ children }) {
     setUser(null);
   }
 
+  async function refreshUser() {
+    if (!token) return null;
+    const data = await apiFetch("/auth/me");
+    setUser(data.user);
+    return data.user;
+  }
+
   const value = useMemo(
     () => ({
       token,
       user,
       isLoading,
       isAuthenticated: Boolean(token && user),
+      isAdmin: user?.role === "ADMIN",
       login,
-      logout
+      logout,
+      refreshUser
     }),
     [token, user, isLoading]
   );

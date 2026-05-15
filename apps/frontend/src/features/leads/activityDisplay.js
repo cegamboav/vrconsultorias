@@ -16,6 +16,9 @@ export function formatActivityDescription(activity) {
   }
 
   if (activity.type === "STATUS_CHANGED") {
+    if (/^Se cambió el estado a /i.test(raw)) {
+      return raw;
+    }
     const m = /^Estado:\s*(.+?)\s*→\s*(.+)$/.exec(raw);
     if (m) {
       return `Flujo: de «${m[1].trim()}» a «${m[2].trim()}».`;

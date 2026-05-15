@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
+import PasswordField from "../../components/ui/PasswordField";
 import { useToast } from "../../components/ui/Toast";
 import { useAuth } from "../../features/auth/hooks/useAuth";
 import { apiFetch } from "../../lib/apiClient";
@@ -236,10 +237,10 @@ export default function UsersPage() {
                   <option value="ADMIN">Administrador</option>
                 </select>
               </label>
-              <Input
+              <PasswordField
                 variant="surface"
                 label="Contraseña inicial (mín. 8 caracteres)"
-                type="password"
+                autoComplete="new-password"
                 value={createForm.password}
                 onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
                 required
@@ -301,25 +302,25 @@ export default function UsersPage() {
       {mode.kind === "password" ? (
         <Card
           variant="surface"
-          title={`Resetear contraseña · ${mode.userName ?? ""}`}
-          subtitle="El usuario podrá ingresar con la nueva contraseña inmediatamente."
+          title={`Restablecer contraseña · ${mode.userName ?? ""}`}
+          subtitle="Define una contraseña temporal. El usuario podrá ingresar con ella de inmediato."
         >
           <form className="stack-md" onSubmit={handleResetPassword}>
             <div className="grid gap-4 md:grid-cols-2">
-              <Input
+              <PasswordField
                 variant="surface"
                 label="Nueva contraseña (mín. 8 caracteres)"
-                type="password"
+                autoComplete="new-password"
                 value={passwordForm.password}
                 onChange={(e) =>
                   setPasswordForm({ ...passwordForm, password: e.target.value })
                 }
                 required
               />
-              <Input
+              <PasswordField
                 variant="surface"
                 label="Confirmar contraseña"
-                type="password"
+                autoComplete="new-password"
                 value={passwordForm.confirm}
                 onChange={(e) =>
                   setPasswordForm({ ...passwordForm, confirm: e.target.value })
@@ -329,7 +330,7 @@ export default function UsersPage() {
             </div>
             <div className="flex flex-wrap gap-3">
               <Button disabled={submitting} type="submit">
-                {submitting ? "Guardando…" : "Resetear contraseña"}
+                {submitting ? "Guardando…" : "Restablecer contraseña"}
               </Button>
               <Button type="button" variant="ghost-surface" onClick={closePanel}>
                 Cancelar
@@ -392,7 +393,7 @@ export default function UsersPage() {
                         className="!h-8 px-2 text-xs"
                         onClick={() => openPassword(u)}
                       >
-                        Contraseña
+                        Restablecer contraseña
                       </Button>
                       <Button
                         type="button"

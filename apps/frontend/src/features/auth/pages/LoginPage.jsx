@@ -3,6 +3,7 @@ import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import Button from "../../../components/ui/Button";
 import Card from "../../../components/ui/Card";
 import Input from "../../../components/ui/Input";
+import PasswordField from "../../../components/ui/PasswordField";
 import { useAuth } from "../hooks/useAuth";
 
 export default function LoginPage() {
@@ -50,9 +51,9 @@ export default function LoginPage() {
             placeholder="tu@email.com"
             required
           />
-          <Input
+          <PasswordField
             label="Password"
-            type="password"
+            autoComplete="current-password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             placeholder="********"
