@@ -20,6 +20,22 @@ export async function handleInboundMessage({ from, text, providerMessageId, rece
     return null;
   }
 
+  // Dedup guard: Meta's webhook delivery is at-least-once. Prevent the same
+  // inbound message from creating multiple WHATSAPP_RECEIVED activities.
+  if (providerMessageId) {
+    const duplicate = await prisma.activity.findFirst({
+      where: {
+        leadId: lead.id,
+        type: ActivityType.WHATSAPP_RECEIVED,
+        metadata: { path: ['providerMessageId'], equals: providerMessageId },
+      },
+    });
+    if (duplicate) {
+      console.warn(`[inbound-whatsapp] duplicate message ignored leadId=${lead.id}`);
+      return { leadId: lead.id, classification: null };
+    }
+  }
+
   // Run classifier (non-blocking failure — if it fails, we still save the activity)
   const classification = await classifyAndSuggest({ lead, text }).catch(() => null);
 

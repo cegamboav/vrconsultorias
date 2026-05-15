@@ -46,7 +46,10 @@ export async function isAlreadyProcessed(lead) {
   const existing = await prisma.activity.findFirst({
     where: {
       leadId: lead.id,
-      type: ActivityType.WHATSAPP_SENT,
+      // Include REMINDER_CREATED so that a failed send in the current cycle
+      // prevents re-attempting (and accumulating error activities) until the
+      // lead is rescheduled to a new nextActionDate.
+      type: { in: [ActivityType.WHATSAPP_SENT, ActivityType.REMINDER_CREATED] },
     },
     orderBy: { createdAt: 'desc' },
   });
