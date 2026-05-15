@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
@@ -47,9 +47,12 @@ export default function LeadDetailPage() {
   const [error, setError] = useState("");
   const [agentConfig, setAgentConfig] = useState(null);
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
+  const [whatsappError, setWhatsappError] = useState("");
 
   const [newNote, setNewNote] = useState("");
   const [noteError, setNoteError] = useState("");
+
+  const isMountedRef = useRef(true);
   const [isAdding, setIsAdding] = useState(false);
 
   const [nextStatus, setNextStatus] = useState("");
@@ -76,6 +79,12 @@ export default function LeadDetailPage() {
     [activities, timelineVisible]
   );
   const canShowMoreTimeline = activities.length > timelineVisible;
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     async function load() {
@@ -213,18 +222,26 @@ export default function LeadDetailPage() {
 
   async function handleSendWhatsApp() {
     setIsSendingWhatsApp(true);
+    setWhatsappError("");
     try {
       await apiFetch(`/api/private/leads/${id}/whatsapp/send`, {
         method: "POST",
         body: JSON.stringify({ dryRun: false })
       });
-      toast.success("WhatsApp enviado correctamente.");
-      const data = await apiFetch(`/api/private/leads/${id}`);
-      setLead(data.lead);
+      if (isMountedRef.current) {
+        toast.success("WhatsApp enviado correctamente.");
+        const data = await apiFetch(`/api/private/leads/${id}`);
+        setLead(data.lead);
+      }
     } catch (err) {
-      toast.error(err.message);
+      if (isMountedRef.current) {
+        setWhatsappError(err.message);
+        toast.error(err.message);
+      }
     } finally {
-      setIsSendingWhatsApp(false);
+      if (isMountedRef.current) {
+        setIsSendingWhatsApp(false);
+      }
     }
   }
 
@@ -592,6 +609,7 @@ export default function LeadDetailPage() {
                   {isSendingWhatsApp ? "Enviando…" : "Enviar WhatsApp ahora"}
                 </Button>
               ) : null}
+              {whatsappError ? <p className="form-error-surface">{whatsappError}</p> : null}
 
               {statusError ? <p className="form-error-surface">{statusError}</p> : null}
 
