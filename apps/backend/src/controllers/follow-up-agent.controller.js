@@ -36,9 +36,10 @@ export const postRun = asyncHandler(async (req, res) => {
       ? req.body.dryRun
       : env.followUpAgent.dryRun;
 
+  const rawLimit = req.body?.limit;
   const limit =
-    typeof req.body?.limit === 'number' && req.body.limit > 0
-      ? req.body.limit
+    typeof rawLimit === 'number' && Number.isInteger(rawLimit) && rawLimit > 0
+      ? Math.min(rawLimit, 200)
       : env.followUpAgent.batchSize;
 
   const results = await runOnce({ dryRun, limit });

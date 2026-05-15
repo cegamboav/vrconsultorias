@@ -6,6 +6,7 @@
  */
 
 import { Router } from 'express';
+import { requireRole } from '../../middlewares/auth.middleware.js';
 import {
   getDue,
   getConfig,
@@ -20,7 +21,8 @@ followUpAgentRouter.get('/due', getDue);
 
 // POST /api/private/follow-up-agent/run
 // Manually trigger one agent cycle (useful for testing / backfill).
-followUpAgentRouter.post('/run', postRun);
+// Restricted to ADMIN: triggering a batch send is a privileged operation.
+followUpAgentRouter.post('/run', requireRole('ADMIN'), postRun);
 
 // GET /api/private/follow-up-agent/config
 // Expose agent configuration to the frontend (enabled flag, dryRun mode).

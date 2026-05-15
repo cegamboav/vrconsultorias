@@ -22,5 +22,6 @@ export const env = {
     timezone: process.env.FOLLOW_UP_AGENT_TZ ?? 'America/Costa_Rica',
     dryRun: process.env.FOLLOW_UP_AGENT_DRY_RUN !== 'false',
     batchSize: Number(process.env.FOLLOW_UP_AGENT_BATCH_SIZE ?? 50),
+    mode: process.env.FOLLOW_UP_AGENT_MODE ?? 'rule-based',
   }
 };

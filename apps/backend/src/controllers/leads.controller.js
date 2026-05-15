@@ -1,4 +1,5 @@
 import { asyncHandler } from "../utils/async-handler.js";
+import { AppError } from "../utils/app-error.js";
 import {
   addLeadActivity,
   applyFollowUpQuick,
@@ -81,11 +82,21 @@ export const createActivity = asyncHandler(async (req, res) => {
 export const sendWhatsApp = asyncHandler(async (req, res) => {
   const lead = await getLeadById(req.params.id);
 
+  // Only leads in FOLLOW_UP state are eligible for a WhatsApp send.
+  // Any other status means the lead is not ready or the send is nonsensical.
+  if (lead.status !== 'FOLLOW_UP') {
+    throw new AppError('Solo se puede enviar WhatsApp a leads en estado FOLLOW_UP.', 400);
+  }
+
   // Accept explicit boolean from JSON body; any non-boolean is treated as false
   // (never send in dry-run mode by accident from a manual trigger).
   const dryRun =
     typeof req.body?.dryRun === 'boolean' ? req.body.dryRun : false;
 
   const result = await processLead(lead, { dryRun });
-  res.status(200).json({ result });
+
+  // Use 422 when the provider or business logic rejected the send so the
+  // caller can distinguish a successful no-op from a processing failure.
+  const statusCode = result.success ? 200 : 422;
+  res.status(statusCode).json({ result });
 });
