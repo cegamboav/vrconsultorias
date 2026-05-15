@@ -66,6 +66,7 @@ export default function LeadDetailPage() {
   const [pendingFollow, setPendingFollow] = useState(null);
 
   const [timelineVisible, setTimelineVisible] = useState(TIMELINE_PAGE);
+  const [suggestionLoading, setSuggestionLoading] = useState({});
 
   const allowedNext = useMemo(() => {
     const current = lead?.status;
@@ -289,6 +290,22 @@ export default function LeadDetailPage() {
       toast.error(err.message);
     } finally {
       setIsChangingStatus(false);
+    }
+  }
+
+  async function handleSuggestion(activityId, status, sentText) {
+    setSuggestionLoading((prev) => ({ ...prev, [activityId]: true }));
+    try {
+      await apiFetch(`/api/private/leads/${id}/activities/${activityId}/suggestion`, {
+        method: "PATCH",
+        body: JSON.stringify({ status, ...(sentText ? { sentText } : {}) }),
+      });
+      const data = await apiFetch(`/api/private/leads/${id}`);
+      setLead(data.lead);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSuggestionLoading((prev) => ({ ...prev, [activityId]: false }));
     }
   }
 
@@ -649,20 +666,128 @@ export default function LeadDetailPage() {
           <div>
             <h3 className="page-heading mb-3">Línea de tiempo</h3>
             <div className="timeline">
-              {visibleActivities.map((activity) => (
-                <article key={activity.id} className="timeline-item">
-                  <div className="timeline-meta">
-                    <span>
-                      <span className="timeline-type">
-                        {activityTypeLabel[activity.type] ?? "Actividad"}
+              {visibleActivities.map((activity) => {
+                if (activity.type === "WHATSAPP_RECEIVED") {
+                  const cls = activity.metadata?.classification;
+                  const clsBorder =
+                    cls === "interested"
+                      ? "border-green-700/60 bg-green-950/30"
+                      : cls === "objection"
+                        ? "border-amber-700/60 bg-amber-950/30"
+                        : cls === "question"
+                          ? "border-sky-700/60 bg-sky-950/30"
+                          : cls === "not_interested"
+                            ? "border-slate-600/60 bg-slate-900/40"
+                            : "border-slate-700/50 bg-slate-900/30";
+                  const clsLabel =
+                    cls === "interested"
+                      ? "Interesado"
+                      : cls === "objection"
+                        ? "Objeción"
+                        : cls === "question"
+                          ? "Consulta"
+                          : cls === "not_interested"
+                            ? "No interesado"
+                            : cls
+                              ? cls
+                              : null;
+                  const hasSuggestion =
+                    activity.metadata?.suggestedReply &&
+                    activity.metadata?.suggestionStatus === "pending";
+                  const isLoading = suggestionLoading[activity.id] ?? false;
+
+                  return (
+                    <article key={activity.id} className={`timeline-item rounded-lg border p-3 ${clsBorder}`}>
+                      <div className="timeline-meta">
+                        <span>
+                          <span className="timeline-type">
+                            {activityTypeLabel[activity.type] ?? "WhatsApp recibido"}
+                          </span>
+                          {clsLabel ? (
+                            <span className="ml-2 rounded-full bg-slate-700/60 px-2 py-0.5 text-xs text-slate-200">
+                              {clsLabel}
+                            </span>
+                          ) : null}
+                        </span>
+                        <span>{formatDate(activity.createdAt)}</span>
+                      </div>
+                      {activity.metadata?.text ? (
+                        <blockquote className="mt-2 rounded border-l-2 border-slate-500 pl-3 text-sm italic text-slate-300">
+                          {activity.metadata.text}
+                        </blockquote>
+                      ) : (
+                        <p className="timeline-title">{activity.description}</p>
+                      )}
+                      {hasSuggestion ? (
+                        <div className="mt-3 rounded-lg border border-sky-800/50 bg-sky-950/20 p-3">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-sky-300">
+                            Respuesta sugerida por IA
+                          </p>
+                          <p className="mt-1 text-sm text-sky-100">
+                            {activity.metadata.suggestedReply}
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              disabled={isLoading}
+                              className="rounded-md border border-slate-600 bg-slate-800 px-3 py-1 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+                              onClick={() => {
+                                navigator.clipboard
+                                  .writeText(activity.metadata.suggestedReply)
+                                  .then(() => toast.success("Copiado al portapapeles."))
+                                  .catch(() => toast.error("No se pudo copiar al portapapeles."));
+                              }}
+                            >
+                              Copiar
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isLoading}
+                              className="rounded-md border border-green-700/60 bg-green-950/40 px-3 py-1 text-xs text-green-200 hover:bg-green-900/40 disabled:opacity-50"
+                              onClick={() =>
+                                handleSuggestion(
+                                  activity.id,
+                                  "sent",
+                                  activity.metadata.suggestedReply
+                                )
+                              }
+                            >
+                              {isLoading ? "Guardando…" : "Marcar como enviada"}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isLoading}
+                              className="rounded-md border border-slate-600 bg-slate-800/60 px-3 py-1 text-xs text-slate-400 hover:bg-slate-700 disabled:opacity-50"
+                              onClick={() => handleSuggestion(activity.id, "discarded")}
+                            >
+                              Descartar
+                            </button>
+                          </div>
+                        </div>
+                      ) : activity.metadata?.suggestionStatus === "sent" ? (
+                        <p className="mt-2 text-xs text-green-400">Respuesta enviada.</p>
+                      ) : activity.metadata?.suggestionStatus === "discarded" ? (
+                        <p className="mt-2 text-xs text-slate-500">Sugerencia descartada.</p>
+                      ) : null}
+                    </article>
+                  );
+                }
+
+                return (
+                  <article key={activity.id} className="timeline-item">
+                    <div className="timeline-meta">
+                      <span>
+                        <span className="timeline-type">
+                          {activityTypeLabel[activity.type] ?? "Actividad"}
+                        </span>
+                        {activity.user?.name ? ` · ${activity.user.name}` : ""}
                       </span>
-                      {activity.user?.name ? ` · ${activity.user.name}` : ""}
-                    </span>
-                    <span>{formatDate(activity.createdAt)}</span>
-                  </div>
-                  <p className="timeline-title">{formatActivityDescription(activity)}</p>
-                </article>
-              ))}
+                      <span>{formatDate(activity.createdAt)}</span>
+                    </div>
+                    <p className="timeline-title">{formatActivityDescription(activity)}</p>
+                  </article>
+                );
+              })}
               {activities.length === 0 ? (
                 <p className="text-app-muted">Sin actividades aún.</p>
               ) : null}

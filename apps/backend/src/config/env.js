@@ -15,6 +15,11 @@ export const env = {
     phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID ?? null,
     businessAccountId: process.env.WHATSAPP_BUSINESS_ACCOUNT_ID ?? null,
     webhookVerifyToken: process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN ?? null,
+    appSecret: process.env.WHATSAPP_APP_SECRET ?? null,
+  },
+  inboundClassifier: {
+    enabled: process.env.INBOUND_CLASSIFIER_ENABLED === 'true',
+    model: process.env.INBOUND_CLASSIFIER_MODEL ?? 'claude-haiku-4-5-20251001',
   },
   followUpAgent: {
     enabled: process.env.FOLLOW_UP_AGENT_ENABLED === 'true',

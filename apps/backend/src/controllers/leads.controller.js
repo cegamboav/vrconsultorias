@@ -1,5 +1,6 @@
 import { asyncHandler } from "../utils/async-handler.js";
 import { AppError } from "../utils/app-error.js";
+import { prisma } from "@crm/database";
 import {
   addLeadActivity,
   applyFollowUpQuick,
@@ -99,4 +100,58 @@ export const sendWhatsApp = asyncHandler(async (req, res) => {
   // caller can distinguish a successful no-op from a processing failure.
   const statusCode = result.success ? 200 : 422;
   res.status(statusCode).json({ result });
+});
+
+/**
+ * PATCH /api/private/leads/:id/activities/:activityId/suggestion
+ * Update the suggestion status of a WHATSAPP_RECEIVED activity.
+ * Body: { status: 'sent' | 'discarded', sentText?: string }
+ */
+export const updateSuggestion = asyncHandler(async (req, res) => {
+  const leadId = req.params.id;
+  const { activityId } = req.params;
+  const { status, sentText } = req.body;
+
+  if (!['sent', 'discarded'].includes(status)) {
+    throw new AppError('status must be "sent" or "discarded".', 400);
+  }
+
+  const activity = await prisma.activity.findFirst({
+    where: { id: activityId, leadId, type: 'WHATSAPP_RECEIVED' },
+  });
+
+  if (!activity) throw new AppError('Activity not found.', 404);
+
+  const updatedActivity = await prisma.activity.update({
+    where: { id: activityId },
+    data: {
+      metadata: {
+        ...(activity.metadata ?? {}),
+        suggestionStatus: status,
+        ...(status === 'sent' && sentText ? { sentText } : {}),
+      },
+    },
+  });
+
+  // If marked as sent, create a WHATSAPP_SENT activity to record the reply
+  if (status === 'sent' && sentText) {
+    await prisma.activity.create({
+      data: {
+        leadId,
+        userId: req.user.id,
+        type: 'WHATSAPP_SENT',
+        description: `WhatsApp enviado (respuesta manual): "${sentText.slice(0, 80)}${sentText.length > 80 ? '...' : ''}"`,
+        metadata: {
+          provider: 'manual',
+          providerMessageId: null,
+          dryRun: false,
+          nextActionDateAtSend: null,
+          sentText,
+          inResponseToActivityId: activityId,
+        },
+      },
+    });
+  }
+
+  res.status(200).json({ activity: updatedActivity });
 });

@@ -11,6 +11,7 @@ import privateDashboardRouter from "./routes/private/dashboard.routes.js";
 import privateLeadsRouter from "./routes/private/leads.routes.js";
 import privateReportsRouter from "./routes/private/reports.routes.js";
 import privateFollowUpAgentRouter from "./routes/private/follow-up-agent.routes.js";
+import webhookRouter from "./routes/public/whatsapp-webhook.routes.js";
 
 const app = express();
 
@@ -23,6 +24,16 @@ app.use(
     credentials: false
   })
 );
+
+// Capture raw body for HMAC verification BEFORE global JSON parser
+// (express.json() discards the raw buffer; this scope-limits the raw parser
+//  to the webhook path and re-attaches a parsed body for the rest of the app)
+app.use('/api/webhooks/whatsapp', express.raw({ type: 'application/json' }), (req, _res, next) => {
+  req.rawBody = req.body;
+  req.body = req.body && req.body.length ? JSON.parse(req.body) : {};
+  next();
+});
+
 app.use(express.json());
 app.use(morgan("dev"));
 
@@ -35,6 +46,7 @@ app.get("/", (_req, res) => {
 
 app.use("/api/health", healthRouter);
 app.use("/auth", authRouter);
+app.use("/api/webhooks/whatsapp", webhookRouter);
 app.use("/api/private/dashboard", requireAuth, privateDashboardRouter);
 app.use("/api/private/leads", requireAuth, privateLeadsRouter);
 app.use("/api/private/reports", requireAuth, privateReportsRouter);

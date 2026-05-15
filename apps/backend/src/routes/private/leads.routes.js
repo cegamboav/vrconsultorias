@@ -11,6 +11,7 @@ leadsRouter.post("/:id/follow-up-quick", leadsController.followUpQuick);
 leadsRouter.patch("/:id/status", leadsController.patchStatus);
 leadsRouter.post("/:id/activities", leadsController.createActivity);
 leadsRouter.post("/:id/whatsapp/send", requireRole('ADMIN'), leadsController.sendWhatsApp);
+leadsRouter.patch("/:id/activities/:activityId/suggestion", leadsController.updateSuggestion);
 leadsRouter.patch("/:id", leadsController.patch);
 leadsRouter.get("/:id", leadsController.getById);
 
