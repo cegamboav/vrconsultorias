@@ -178,6 +178,11 @@ End your final message with a summary line like:
 
     if (response.stop_reason === 'end_turn') break;
 
+    if (response.stop_reason === 'max_tokens') {
+      console.warn('[claude-agent] max_tokens reached — stopping loop');
+      break;
+    }
+
     if (response.stop_reason === 'tool_use') {
       const toolResults = [];
 
