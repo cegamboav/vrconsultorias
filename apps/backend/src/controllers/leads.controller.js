@@ -9,6 +9,7 @@ import {
   searchLeadsForReferrer,
   updateLead
 } from "../services/leads.service.js";
+import { processLead } from "../services/follow-up-agent.service.js";
 
 export const list = asyncHandler(async (_req, res) => {
   const leads = await listLeads();
@@ -69,4 +70,22 @@ export const createActivity = asyncHandler(async (req, res) => {
     payload: req.body
   });
   res.status(201).json({ activity });
+});
+
+/**
+ * POST /api/private/leads/:id/whatsapp/send
+ * Manually trigger a WhatsApp message for a specific lead.
+ * Body (optional):
+ *   - dryRun {boolean} – when true, simulates send without calling the provider
+ */
+export const sendWhatsApp = asyncHandler(async (req, res) => {
+  const lead = await getLeadById(req.params.id);
+
+  // Accept explicit boolean from JSON body; any non-boolean is treated as false
+  // (never send in dry-run mode by accident from a manual trigger).
+  const dryRun =
+    typeof req.body?.dryRun === 'boolean' ? req.body.dryRun : false;
+
+  const result = await processLead(lead, { dryRun });
+  res.status(200).json({ result });
 });

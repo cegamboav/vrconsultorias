@@ -9,6 +9,7 @@ leadsRouter.post("/", leadsController.create);
 leadsRouter.post("/:id/follow-up-quick", leadsController.followUpQuick);
 leadsRouter.patch("/:id/status", leadsController.patchStatus);
 leadsRouter.post("/:id/activities", leadsController.createActivity);
+leadsRouter.post("/:id/whatsapp/send", leadsController.sendWhatsApp);
 leadsRouter.patch("/:id", leadsController.patch);
 leadsRouter.get("/:id", leadsController.getById);
 
