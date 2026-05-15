@@ -42,7 +42,34 @@ export const postRun = asyncHandler(async (req, res) => {
       ? Math.min(rawLimit, 200)
       : env.followUpAgent.batchSize;
 
-  const results = await runOnce({ dryRun, limit });
+  const mode = req.body?.mode ?? env.followUpAgent.mode;
+
+  let results = { processed: 0, skipped: 0, errors: 0 };
+
+  if (mode === 'claude' || mode === 'both') {
+    const { runClaudeAgent } = await import('../agent/claude-followup-agent.js');
+    const claudeResult = await runClaudeAgent({ dryRun, limit });
+    results = { ...results, ...claudeResult };
+  }
+
+  if (mode === 'rule-based' || mode === 'both') {
+    const ruleResult = await runOnce({ dryRun, limit });
+    if (mode === 'both') {
+      // Merge counts when running both
+      results = {
+        processed: results.processed + ruleResult.processed,
+        skipped: results.skipped + ruleResult.skipped,
+        errors: results.errors + ruleResult.errors,
+      };
+    } else {
+      results = ruleResult;
+    }
+  }
+
+  if (mode !== 'claude' && mode !== 'rule-based' && mode !== 'both') {
+    results = await runOnce({ dryRun, limit });
+  }
+
   res.status(200).json({ results });
 });
 

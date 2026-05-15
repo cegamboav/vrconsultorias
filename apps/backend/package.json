@@ -9,9 +9,11 @@
     "start": "node src/server.js",
     "lint": "eslint .",
     "format": "prettier --check .",
-    "test": "node --test src/utils/phone.test.js src/services/whatsapp/templates.es.test.js"
+    "test": "node --test src/utils/phone.test.js src/services/whatsapp/templates.es.test.js",
+    "cli": "node cli.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.55.0",
     "@crm/database": "0.1.0",
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",

@@ -23,5 +23,9 @@ export const env = {
     dryRun: process.env.FOLLOW_UP_AGENT_DRY_RUN !== 'false',
     batchSize: Number(process.env.FOLLOW_UP_AGENT_BATCH_SIZE ?? 50),
     mode: process.env.FOLLOW_UP_AGENT_MODE ?? 'rule-based',
-  }
+    claudeModel: process.env.CLAUDE_AGENT_MODEL ?? null,
+  },
+  anthropic: {
+    apiKey: process.env.ANTHROPIC_API_KEY ?? null,
+  },
 };
