@@ -20,8 +20,12 @@ Tu tarea: analizar el mensaje de un lead y devolver un JSON con:
 
 Responde SOLO con JSON válido, sin markdown, sin texto extra.`;
 
-  const userPrompt = `Lead: ${lead.fullName} (status: ${lead.status}, reason: ${lead.followUpReason ?? 'none'})
-Mensaje recibido: "${text}"`;
+  const userPrompt = `<lead_name>${lead.fullName ?? ''}</lead_name>
+<lead_status>${lead.status}</lead_status>
+<follow_up_reason>${lead.followUpReason ?? 'none'}</follow_up_reason>
+<inbound_message>${text}</inbound_message>`;
+
+  const sanitize = (str) => String(str ?? '').replace(/[\x00-\x1F\x7F]/g, '').trim();
 
   try {
     const response = await client.messages.create({
@@ -34,14 +38,10 @@ Mensaje recibido: "${text}"`;
     const raw = response.content[0]?.text ?? '';
     const parsed = JSON.parse(raw);
 
-    if (!VALID_CLASSIFICATIONS.includes(parsed.classification)) {
-      parsed.classification = 'other';
-    }
-
     return {
-      classification: parsed.classification,
-      intent: String(parsed.intent ?? '').slice(0, 100),
-      suggestedReply: String(parsed.suggestedReply ?? '').slice(0, 300),
+      classification: VALID_CLASSIFICATIONS.includes(parsed.classification) ? parsed.classification : 'other',
+      intent: sanitize(parsed.intent).slice(0, 100),
+      suggestedReply: sanitize(parsed.suggestedReply).slice(0, 300),
       confidence: Math.min(1, Math.max(0, Number(parsed.confidence ?? 0.5))),
       model: env.inboundClassifier.model,
     };

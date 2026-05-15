@@ -301,11 +301,11 @@ export default function LeadDetailPage() {
         body: JSON.stringify({ status, ...(sentText ? { sentText } : {}) }),
       });
       const data = await apiFetch(`/api/private/leads/${id}`);
-      setLead(data.lead);
+      if (isMountedRef.current) setLead(data.lead);
     } catch (err) {
-      toast.error(err.message);
+      if (isMountedRef.current) toast.error(err.message);
     } finally {
-      setSuggestionLoading((prev) => ({ ...prev, [activityId]: false }));
+      if (isMountedRef.current) setSuggestionLoading((prev) => ({ ...prev, [activityId]: false }));
     }
   }
 

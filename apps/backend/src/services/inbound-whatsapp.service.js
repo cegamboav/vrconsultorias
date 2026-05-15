@@ -23,7 +23,8 @@ export async function handleInboundMessage({ from, text, providerMessageId, rece
   // Run classifier (non-blocking failure — if it fails, we still save the activity)
   const classification = await classifyAndSuggest({ lead, text }).catch(() => null);
 
-  const receivedDate = receivedAt ? new Date(receivedAt * 1000) : new Date();
+  const ts = Number(receivedAt);
+  const receivedDate = receivedAt && !isNaN(ts) ? new Date(ts * 1000) : new Date();
 
   await prisma.$transaction(async (tx) => {
     await tx.lead.update({
