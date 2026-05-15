@@ -77,6 +77,20 @@ export function getTemplate(status, followUpReason) {
 }
 
 /**
+ * Look up a template by lead status and follow-up reason, throwing if not found.
+ *
+ * @param {string} status
+ * @param {string} [followUpReason]
+ * @returns {{ templateKey: string, text: string }}
+ * @throws {Error} if no template matches
+ */
+export function getTemplateOrThrow(status, followUpReason) {
+  const tpl = getTemplate(status, followUpReason);
+  if (!tpl) throw new Error(`No WhatsApp template found for status=${status} reason=${followUpReason}`);
+  return tpl;
+}
+
+/**
  * Replace `{{fullName}}`, `{{ownerName}}`, and `{{calendlyUrl}}` placeholders
  * in a template text string with values from the variables object.
  * Missing variables are replaced with an empty string.

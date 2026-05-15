@@ -100,7 +100,7 @@ export class MetaCloudWhatsAppProvider extends WhatsAppProvider {
     );
     return {
       providerMessageId: null,
-      status: 'STUB',
+      status: 'STUB', // Will become 'SENT' when the real fetch call is enabled
       raw: null,
     };
   }

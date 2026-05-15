@@ -7,9 +7,7 @@ import { WhatsAppProvider } from './whatsapp.provider.js';
  */
 export class NoopWhatsAppProvider extends WhatsAppProvider {
   async sendTemplate({ to, templateKey, variables, leadId }) {
-    console.log(
-      `[WhatsApp:NOOP] leadId=${leadId} to=${to} template=${templateKey} variables=${JSON.stringify(variables)}`
-    );
+    console.log(`[WhatsApp:noop] leadId=${leadId} template=${templateKey} to=***`);
     return {
       providerMessageId: null,
       status: 'DRY_RUN',
