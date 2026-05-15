@@ -484,6 +484,11 @@
     @apply inline-flex items-center rounded-md border border-slate-700/70 bg-slate-900/70 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-300;
   }
 
+  /* Badge de servicio (multiservicio) */
+  .service-category-badge {
+    @apply inline-flex shrink-0 items-center rounded-md border px-2 py-0.5 text-[11px] font-medium;
+  }
+
   /* === Reportes === */
   .report-kpi {
     @apply rounded-xl border border-slate-700/70 bg-slate-900/60 p-4;
@@ -572,6 +577,36 @@
 
   .report-range-summary-value {
     @apply font-medium text-slate-200;
+  }
+
+  /* Bloque de usuario en el sidebar */
+  .app-sidebar-user {
+    @apply mt-auto border-t border-slate-800 px-4 py-3;
+  }
+
+  .app-sidebar-user-name {
+    @apply text-sm font-semibold text-slate-100;
+  }
+
+  .app-sidebar-user-meta {
+    @apply mt-0.5 text-xs text-slate-400;
+  }
+
+  /* Actor prominente en timelines (auditoría colaborativa) */
+  .timeline-actor {
+    @apply text-sm font-semibold text-slate-100;
+  }
+
+  .timeline-subtype {
+    @apply mt-1 text-[11px] uppercase tracking-wide text-slate-500;
+  }
+
+  .dashboard-activity-actor {
+    @apply font-semibold text-slate-200;
+  }
+
+  .dashboard-activity-sep {
+    @apply text-slate-600;
   }
 
   /* Toast stack (esquina superior derecha) */

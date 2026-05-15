@@ -10,6 +10,8 @@ import healthRouter from "./routes/health.routes.js";
 import privateDashboardRouter from "./routes/private/dashboard.routes.js";
 import privateLeadsRouter from "./routes/private/leads.routes.js";
 import privateReportsRouter from "./routes/private/reports.routes.js";
+import privateUsersRouter from "./routes/private/users.routes.js";
+import privateServiceCategoriesRouter from "./routes/private/service-categories.routes.js";
 
 const app = express();
 
@@ -37,6 +39,8 @@ app.use("/auth", authRouter);
 app.use("/api/private/dashboard", requireAuth, privateDashboardRouter);
 app.use("/api/private/leads", requireAuth, privateLeadsRouter);
 app.use("/api/private/reports", requireAuth, privateReportsRouter);
+app.use("/api/private/users", requireAuth, privateUsersRouter);
+app.use("/api/private/service-categories", requireAuth, privateServiceCategoriesRouter);
 app.get("/api/protected", requireAuth, (req, res) => {
   res.status(200).json({
     message: "Ruta protegida activa.",

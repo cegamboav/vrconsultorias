@@ -17,8 +17,8 @@ enum LeadStatus {
   CONTACTED
   SCHEDULED
   FOLLOW_UP
-  CLOSED_INVESTED
-  CLOSED_NOT_INVESTED
+  CLOSED_SUCCESS
+  CLOSED_LOST
 }
 
 model User {
@@ -28,6 +28,8 @@ model User {
   phone      String?
   password   String
   role       Role       @default(USER)
+  /// Si el usuario está activo. Inactivos no pueden iniciar sesión ni usar la API.
+  isActive   Boolean    @default(true)
   calendly   String?
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
@@ -35,37 +37,54 @@ model User {
   leads      Lead[]     @relation("LeadOwner")
 }
 
+/// Línea de negocio / servicio principal del lead (multiservicio).
+model ServiceCategory {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  /// Color hex para badges (ej. #6B9BD1).
+  color     String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  leads     Lead[]
+}
+
 model Lead {
-  id                 String     @id @default(cuid())
-  leadNumber         Int        @unique @default(autoincrement())
+  id                 String          @id @default(cuid())
+  leadNumber         Int             @unique @default(autoincrement())
   ownerId            String?
-  owner              User?      @relation("LeadOwner", fields: [ownerId], references: [id])
+  owner              User?           @relation("LeadOwner", fields: [ownerId], references: [id])
+  serviceCategoryId  String
+  serviceCategory    ServiceCategory   @relation(fields: [serviceCategoryId], references: [id])
   fullName           String
   /// Identificador principal de negocio: un solo lead por teléfono (dedup + timeline unificado).
-  phone              String     @unique
+  phone              String          @unique
   email              String?
   source             LeadSource
   /// Texto libre si el referidor no está registrado como lead.
   referredBy         String?
   /// Lead existente que refiere (cliente referidor).
   referredByLeadId   String?
-  referredByLead     Lead?      @relation("LeadReferrals", fields: [referredByLeadId], references: [id])
-  referredLeads      Lead[]     @relation("LeadReferrals")
-  status             LeadStatus @default(NEW)
+  referredByLead     Lead?           @relation("LeadReferrals", fields: [referredByLeadId], references: [id])
+  referredLeads      Lead[]          @relation("LeadReferrals")
+  status             LeadStatus      @default(NEW)
+  /// Motivo cuando el lead cierra como no concretado.
   noInvestmentReason String?
   /// Motivo por el que el lead está en pausa de seguimiento.
   followUpReason     FollowUpReason?
   /// Veces que el lead ha entrado al estado FOLLOW_UP (se incrementa solo al transicionar a FOLLOW_UP).
-  followUpCount      Int        @default(0)
+  followUpCount      Int             @default(0)
   nextActionDate     DateTime?
   lastActivityAt     DateTime?
   closedAt           DateTime?
-  createdAt          DateTime   @default(now())
-  updatedAt          DateTime   @updatedAt
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
   observations       String?
   activities         Activity[]
 
   @@index([referredByLeadId])
+  @@index([serviceCategoryId])
 }
 
 enum LeadSource {

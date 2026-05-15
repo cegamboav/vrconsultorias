@@ -1,10 +1,11 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { APP_NAV } from "../config/navigation";
+import { navForRole } from "../config/navigation";
 import { useAuth } from "../../features/auth/hooks/useAuth";
 
 export default function Sidebar({ isOpen, onCloseBackdrop }) {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const navigate = useNavigate();
+  const nav = navForRole(user?.role);
 
   function handleLogout() {
     logout();
@@ -34,7 +35,7 @@ export default function Sidebar({ isOpen, onCloseBackdrop }) {
         </div>
 
         <nav className="app-sidebar-nav">
-          {APP_NAV.map((item) => (
+          {nav.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -46,6 +47,15 @@ export default function Sidebar({ isOpen, onCloseBackdrop }) {
             </NavLink>
           ))}
         </nav>
+
+        {user ? (
+          <div className="app-sidebar-user">
+            <p className="app-sidebar-user-name">{user.name}</p>
+            <p className="app-sidebar-user-meta">
+              {user.role === "ADMIN" ? "Administrador" : "Asesor"} · {user.email}
+            </p>
+          </div>
+        ) : null}
 
         <div className="sidebar-footer">
           <button type="button" className="sidebar-logout" onClick={handleLogout}>

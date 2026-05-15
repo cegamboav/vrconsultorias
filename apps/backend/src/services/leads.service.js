@@ -22,12 +22,12 @@ import {
 const allowedTransitions = {
   NEW: ["CONTACTED"],
   CONTACTED: ["SCHEDULED", "FOLLOW_UP"],
-  SCHEDULED: ["CLOSED_INVESTED", "CLOSED_NOT_INVESTED", "FOLLOW_UP"],
+  SCHEDULED: ["CLOSED_SUCCESS", "CLOSED_LOST", "FOLLOW_UP"],
   // El asesor puede cerrar manualmente un lead que está en seguimiento
   // (típicamente después de varios intentos sin respuesta).
-  FOLLOW_UP: ["CONTACTED", "SCHEDULED", "CLOSED_INVESTED", "CLOSED_NOT_INVESTED"],
-  CLOSED_INVESTED: [],
-  CLOSED_NOT_INVESTED: ["FOLLOW_UP", "CONTACTED", "SCHEDULED"]
+  FOLLOW_UP: ["CONTACTED", "SCHEDULED", "CLOSED_SUCCESS", "CLOSED_LOST"],
+  CLOSED_SUCCESS: [],
+  CLOSED_LOST: ["FOLLOW_UP", "CONTACTED", "SCHEDULED"]
 };
 
 const legacySourceMap = {
@@ -61,7 +61,28 @@ function validateStatusTransition(currentStatus, nextStatus) {
 }
 
 function isClosedStatus(status) {
-  return status === LeadStatus.CLOSED_INVESTED || status === LeadStatus.CLOSED_NOT_INVESTED;
+  return status === LeadStatus.CLOSED_SUCCESS || status === LeadStatus.CLOSED_LOST;
+}
+
+const SERVICE_CATEGORY_SELECT = {
+  id: true,
+  name: true,
+  slug: true,
+  color: true
+};
+
+async function assertServiceCategoryValid(serviceCategoryId) {
+  if (!serviceCategoryId) {
+    throw new AppError("Selecciona el servicio del lead.", 400);
+  }
+  const cat = await prisma.serviceCategory.findFirst({
+    where: { id: String(serviceCategoryId).trim(), isActive: true },
+    select: { id: true }
+  });
+  if (!cat) {
+    throw new AppError("Servicio no válido.", 400);
+  }
+  return cat.id;
 }
 
 function normalizeFollowUpReason(value) {
@@ -93,8 +114,8 @@ const statusPriority = {
   CONTACTED: 2,
   SCHEDULED: 3,
   FOLLOW_UP: 4,
-  CLOSED_INVESTED: 5,
-  CLOSED_NOT_INVESTED: 6
+  CLOSED_SUCCESS: 5,
+  CLOSED_LOST: 6
 };
 
 function compareLeadsForBandeja(a, b) {
@@ -122,7 +143,8 @@ export async function listLeads() {
       nextActionDate: true,
       lastActivityAt: true,
       createdAt: true,
-      updatedAt: true
+      updatedAt: true,
+      serviceCategory: { select: SERVICE_CATEGORY_SELECT }
     }
   });
 
@@ -160,6 +182,7 @@ export async function createLead({ userId, payload }) {
     phone,
     email,
     source,
+    serviceCategoryId,
     referredBy,
     referredByLeadId,
     observations,
@@ -188,6 +211,8 @@ export async function createLead({ userId, payload }) {
     await assertReferrerLeadValid(refId, null);
   }
 
+  const categoryId = await assertServiceCategoryValid(serviceCategoryId);
+
   const now = new Date();
 
   let parsedNextAction = null;
@@ -205,6 +230,7 @@ export async function createLead({ userId, payload }) {
       phone: trimmedPhone,
       email: email ? String(email).trim().toLowerCase() : null,
       source: normalizeSource(source),
+      serviceCategoryId: categoryId,
       referredBy: referredBy ? String(referredBy).trim() : null,
       referredByLeadId: refId,
       observations: observations ? String(observations).trim() : null,
@@ -234,7 +260,8 @@ export async function createLead({ userId, payload }) {
       status: true,
       nextActionDate: true,
       lastActivityAt: true,
-      createdAt: true
+      createdAt: true,
+      serviceCategory: { select: SERVICE_CATEGORY_SELECT }
     }
   });
 
@@ -253,6 +280,11 @@ export async function updateLead({ leadId, userId, payload }) {
         : String(payload.referredByLeadId).trim();
   if (nextRefId) {
     await assertReferrerLeadValid(nextRefId, leadId);
+  }
+
+  let nextServiceCategoryId = lead.serviceCategoryId;
+  if (payload.serviceCategoryId !== undefined) {
+    nextServiceCategoryId = await assertServiceCategoryValid(payload.serviceCategoryId);
   }
 
   const next = {
@@ -289,7 +321,8 @@ export async function updateLead({ leadId, userId, payload }) {
         throw new AppError("Fecha de próxima acción no válida.", 400);
       }
       return parsed;
-    })()
+    })(),
+    serviceCategoryId: nextServiceCategoryId
   };
 
   if (payload.phone !== undefined && String(payload.phone).trim() !== lead.phone) {
@@ -322,6 +355,9 @@ export async function updateLead({ leadId, userId, payload }) {
   if (next.source !== lead.source) {
     parts.push("Fuente del lead actualizada");
   }
+  if (next.serviceCategoryId !== lead.serviceCategoryId) {
+    parts.push("Servicio del lead actualizado");
+  }
   if (next.referredBy !== lead.referredBy) {
     parts.push("Texto de referido actualizado");
   }
@@ -353,6 +389,7 @@ export async function updateLead({ leadId, userId, payload }) {
         fullName: next.fullName,
         email: next.email,
         source: next.source,
+        serviceCategoryId: next.serviceCategoryId,
         referredBy: next.referredBy,
         referredByLeadId: next.referredByLeadId,
         observations: next.observations,
@@ -372,6 +409,7 @@ export async function updateLead({ leadId, userId, payload }) {
             "fullName",
             "email",
             "source",
+            "serviceCategoryId",
             "referredBy",
             "referredByLeadId",
             "observations",
@@ -390,6 +428,7 @@ export async function getLeadById(id) {
     where: { id },
     include: {
       owner: { select: { id: true, name: true, email: true, role: true } },
+      serviceCategory: { select: SERVICE_CATEGORY_SELECT },
       referredByLead: {
         select: { id: true, leadNumber: true, fullName: true, phone: true }
       },
@@ -427,10 +466,10 @@ export async function changeLeadStatus({ leadId, userId, payload }) {
 
   validateStatusTransition(lead.status, status);
 
-  if (status === LeadStatus.CLOSED_NOT_INVESTED) {
+  if (status === LeadStatus.CLOSED_LOST) {
     const reason = noInvestmentReason ? String(noInvestmentReason).trim() : "";
     if (!reason) {
-      throw new AppError("Debes indicar el motivo cuando el lead cierra sin inversión.", 400);
+      throw new AppError("Debes indicar el motivo cuando el lead no se concreta.", 400);
     }
   }
 
@@ -476,9 +515,9 @@ export async function changeLeadStatus({ leadId, userId, payload }) {
   }
 
   let nextNoReason = lead.noInvestmentReason;
-  if (status === LeadStatus.CLOSED_NOT_INVESTED) {
+  if (status === LeadStatus.CLOSED_LOST) {
     nextNoReason = String(noInvestmentReason).trim();
-  } else if (status === LeadStatus.CLOSED_INVESTED) {
+  } else if (status === LeadStatus.CLOSED_SUCCESS) {
     nextNoReason = null;
   }
 

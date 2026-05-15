@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
+import ServiceCategoryBadge from "../../components/ui/ServiceCategoryBadge";
 import StatusBadge from "../../components/ui/StatusBadge";
 import { useToast } from "../../components/ui/Toast";
 import { formatActivityDescription } from "../../features/leads/activityDisplay";
@@ -30,10 +31,10 @@ function formatDate(value) {
 const allowedNextByStatus = {
   NEW: ["CONTACTED"],
   CONTACTED: ["SCHEDULED", "FOLLOW_UP"],
-  SCHEDULED: ["CLOSED_INVESTED", "CLOSED_NOT_INVESTED", "FOLLOW_UP"],
-  FOLLOW_UP: ["CONTACTED", "SCHEDULED", "CLOSED_INVESTED", "CLOSED_NOT_INVESTED"],
-  CLOSED_INVESTED: [],
-  CLOSED_NOT_INVESTED: ["FOLLOW_UP", "CONTACTED", "SCHEDULED"]
+  SCHEDULED: ["CLOSED_SUCCESS", "CLOSED_LOST", "FOLLOW_UP"],
+  FOLLOW_UP: ["CONTACTED", "SCHEDULED", "CLOSED_SUCCESS", "CLOSED_LOST"],
+  CLOSED_SUCCESS: [],
+  CLOSED_LOST: ["FOLLOW_UP", "CONTACTED", "SCHEDULED"]
 };
 
 export default function LeadDetailPage() {
@@ -94,7 +95,7 @@ export default function LeadDetailPage() {
   }, [id]);
 
   useEffect(() => {
-    if (nextStatus === "CLOSED_NOT_INVESTED") {
+    if (nextStatus === "CLOSED_LOST") {
       setCloseReason((prev) => prev || (lead?.noInvestmentReason ?? ""));
     }
   }, [nextStatus, lead?.noInvestmentReason]);
@@ -210,10 +211,10 @@ export default function LeadDetailPage() {
       return;
     }
 
-    if (nextStatus === "CLOSED_NOT_INVESTED") {
+    if (nextStatus === "CLOSED_LOST") {
       const reason = closeReason.trim();
       if (!reason) {
-        setStatusError("Indica el motivo de no inversión.");
+        setStatusError("Indica el motivo de no concretado.");
         return;
       }
     }
@@ -221,7 +222,7 @@ export default function LeadDetailPage() {
     setIsChangingStatus(true);
     try {
       const body = { status: nextStatus };
-      if (nextStatus === "CLOSED_NOT_INVESTED") {
+      if (nextStatus === "CLOSED_LOST") {
         body.noInvestmentReason = closeReason.trim();
       }
 
@@ -275,6 +276,9 @@ export default function LeadDetailPage() {
             <p className="lead-detail-kicker">Lead #{lead.leadNumber}</p>
             <h2 className="page-title mt-1 max-w-2xl">{lead.fullName}</h2>
             <div className="lead-detail-meta-row">
+              {lead.serviceCategory ? (
+                <ServiceCategoryBadge category={lead.serviceCategory} />
+              ) : null}
               <StatusBadge status={lead.status} />
               {lead.status === "FOLLOW_UP" && lead.followUpReason ? (
                 <span
@@ -352,9 +356,17 @@ export default function LeadDetailPage() {
                   </p>
                 </div>
               ) : null}
+              {lead.serviceCategory ? (
+                <div>
+                  <p className="page-label">Servicio</p>
+                  <p className="page-value">
+                    <ServiceCategoryBadge category={lead.serviceCategory} />
+                  </p>
+                </div>
+              ) : null}
               {lead.noInvestmentReason ? (
                 <div>
-                  <p className="page-label">Motivo (no inversión)</p>
+                  <p className="page-label">Motivo (no concretado)</p>
                   <p className="page-value">{lead.noInvestmentReason}</p>
                 </div>
               ) : null}
@@ -409,7 +421,7 @@ export default function LeadDetailPage() {
                 </p>
                 <p className="mt-1 text-sm text-rose-100">
                   Este lead ha estado {followUpCount} veces en seguimiento.
-                  ¿Desea cerrarlo como No invirtió?
+                  ¿Desea cerrarlo como No concretado?
                 </p>
                 <div className="mt-2">
                   <Button
@@ -418,10 +430,10 @@ export default function LeadDetailPage() {
                     className="!h-9 text-xs"
                     onClick={() => {
                       setPendingFollow(null);
-                      setNextStatus("CLOSED_NOT_INVESTED");
+                      setNextStatus("CLOSED_LOST");
                     }}
                   >
-                    Cerrar sin invertir
+                    Cerrar sin concretar
                   </Button>
                 </div>
               </div>
@@ -527,9 +539,9 @@ export default function LeadDetailPage() {
                 </div>
               ) : null}
 
-              {nextStatus === "CLOSED_NOT_INVESTED" ? (
+              {nextStatus === "CLOSED_LOST" ? (
                 <label className="form-control">
-                  <span className="form-label-surface">Motivo de no inversión</span>
+                  <span className="form-label-surface">Motivo de no concretado</span>
                   <textarea
                     className="textarea-surface"
                     value={closeReason}
@@ -581,15 +593,15 @@ export default function LeadDetailPage() {
               {visibleActivities.map((activity) => (
                 <article key={activity.id} className="timeline-item">
                   <div className="timeline-meta">
-                    <span>
-                      <span className="timeline-type">
-                        {activityTypeLabel[activity.type] ?? "Actividad"}
-                      </span>
-                      {activity.user?.name ? ` · ${activity.user.name}` : ""}
+                    <span className="timeline-actor">
+                      {activity.user?.name ?? "Sistema"}
                     </span>
                     <span>{formatDate(activity.createdAt)}</span>
                   </div>
                   <p className="timeline-title">{formatActivityDescription(activity)}</p>
+                  <p className="timeline-subtype">
+                    {activityTypeLabel[activity.type] ?? "Actividad"}
+                  </p>
                 </article>
               ))}
               {activities.length === 0 ? (

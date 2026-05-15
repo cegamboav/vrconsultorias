@@ -13,11 +13,15 @@ export async function requireAuth(req, res, next) {
     const decoded = verifyAccessToken(token);
     const user = await prisma.user.findUnique({
       where: { id: decoded.sub },
-      select: { id: true, name: true, email: true, role: true }
+      select: { id: true, name: true, email: true, role: true, isActive: true }
     });
 
     if (!user) {
       return res.status(401).json({ message: "Token invalido." });
+    }
+
+    if (!user.isActive) {
+      return res.status(403).json({ message: "Cuenta desactivada. Contacta a un administrador." });
     }
 
     req.user = user;

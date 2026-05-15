@@ -12,7 +12,10 @@ const leadMiniSelect = {
   nextActionDate: true,
   updatedAt: true,
   closedAt: true,
-  createdAt: true
+  createdAt: true,
+  serviceCategory: {
+    select: { id: true, name: true, slug: true, color: true }
+  }
 };
 
 export async function getDashboardSnapshot() {
@@ -39,7 +42,7 @@ export async function getDashboardSnapshot() {
     }),
     prisma.lead.findMany({
       where: {
-        status: { in: [LeadStatus.CLOSED_INVESTED, LeadStatus.CLOSED_NOT_INVESTED] }
+        status: { in: [LeadStatus.CLOSED_SUCCESS, LeadStatus.CLOSED_LOST] }
       },
       orderBy: { closedAt: "desc" },
       take: 25,
