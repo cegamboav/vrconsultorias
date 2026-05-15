@@ -59,7 +59,16 @@ function parseArgs(argv) {
 // ---------------------------------------------------------------------------
 
 async function main() {
-  const [, , resource, command, positionalId, ...rest] = process.argv;
+  const raw = process.argv;
+  const resource = raw[2];
+  const command = raw[3];
+  // argv[4] is positional only if it exists and doesn't start with '--'
+  const positionalId = (raw[4] && !raw[4].startsWith('--')) ? raw[4] : undefined;
+  // Flags start after the positional ID (if present) or at argv[4] if no positional
+  const flagsStart = positionalId ? 5 : 4;
+  const flags = parseArgs(raw.slice(flagsStart));
+  // Prefer positional ID, fall back to --id flag
+  const id = positionalId ?? flags.id;
 
   if (!resource || !command) {
     printError('Usage: node cli.js <resource> <command> [<id>] [options]', 'USAGE');
@@ -70,10 +79,6 @@ async function main() {
     printError(`Unknown resource "${resource}". Available: leads`, 'UNKNOWN_RESOURCE');
     process.exit(1);
   }
-
-  // For commands that take a positional <id>, it lives in process.argv[4].
-  // Remaining flags start at process.argv[5].
-  const flags = parseArgs(rest);
 
   // Normalise --dry-run (kebab) to dryRun (camel)
   const dryRun =
@@ -90,34 +95,29 @@ async function main() {
       }
 
       case 'get': {
-        const id = positionalId ?? flags.id;
         result = await getLead({ id });
         break;
       }
 
       case 'send-whatsapp': {
-        const id = positionalId ?? flags.id;
         const message = flags.message ?? null;
         result = await sendWhatsApp({ id, message: message || undefined, dryRun });
         break;
       }
 
       case 'add-note': {
-        const id = positionalId ?? flags.id;
         const text = flags.text ?? null;
         result = await addNote({ id, text });
         break;
       }
 
       case 'update-status': {
-        const id = positionalId ?? flags.id;
         const status = flags.status ?? null;
         result = await updateStatus({ id, status });
         break;
       }
 
       case 'reschedule': {
-        const id = positionalId ?? flags.id;
         const days = flags.days !== undefined ? Number(flags.days) : undefined;
         const date = flags.date ?? undefined;
         result = await reschedule({ id, days, date });

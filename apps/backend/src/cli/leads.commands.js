@@ -8,6 +8,8 @@
 
 import { prisma, ActivityType } from '@crm/database';
 import { processLead } from '../services/follow-up-agent.service.js';
+import { whatsappProvider } from '../services/whatsapp/index.js';
+import { toE164 } from '../utils/phone.js';
 
 // ---------------------------------------------------------------------------
 // list-due
@@ -123,8 +125,24 @@ export async function sendWhatsApp({ id, message, dryRun = false }) {
   if (!lead) throw Object.assign(new Error(`Lead ${id} not found`), { code: 'NOT_FOUND' });
 
   if (message) {
-    // Custom message path — write activity directly
+    // Custom message path — call the provider then write activity
     const text = String(message);
+
+    // Call the provider so the message is dispatched (noop is safe without credentials).
+    // Custom free-text messages are not truly template-based; when Meta is connected,
+    // this would need sendMessage() instead. For now, sendTemplate with key 'custom'
+    // is handled gracefully by the noop provider.
+    let providerResult = { providerMessageId: null, status: 'DRY_RUN', raw: null };
+    if (!dryRun) {
+      const normalizedPhone = toE164(lead.phone);
+      providerResult = await whatsappProvider.sendTemplate({
+        to: normalizedPhone,
+        templateKey: 'custom',
+        variables: { fullName: lead.fullName ?? '', ownerName: '', calendlyUrl: '' },
+        leadId: lead.id,
+      });
+    }
+
     const activity = await prisma.activity.create({
       data: {
         leadId: lead.id,
@@ -135,7 +153,7 @@ export async function sendWhatsApp({ id, message, dryRun = false }) {
           : `WhatsApp enviado: "${text.slice(0, 80)}..."`,
         metadata: {
           provider: 'custom',
-          providerMessageId: null,
+          providerMessageId: providerResult.providerMessageId,
           dryRun,
           nextActionDateAtSend: lead.nextActionDate?.toISOString() ?? null,
           customMessage: true,
@@ -238,6 +256,25 @@ export async function updateStatus({ id, status }) {
 
   const lead = await prisma.lead.findUnique({ where: { id } });
   if (!lead) throw Object.assign(new Error(`Lead ${id} not found`), { code: 'NOT_FOUND' });
+
+  // Validate required fields before allowing transition to statuses that need them.
+  // This mirrors the business rules enforced by leads.service.js in the HTTP layer.
+  if (upperStatus === 'CLOSED_NOT_INVESTED' && !lead.noInvestmentReason) {
+    throw Object.assign(
+      new Error(
+        'noInvestmentReason is required for CLOSED_NOT_INVESTED. Use leads update first to set it.'
+      ),
+      { code: 'MISSING_FIELD' }
+    );
+  }
+  if (upperStatus === 'FOLLOW_UP' && !lead.nextActionDate) {
+    throw Object.assign(
+      new Error(
+        'nextActionDate is required before setting FOLLOW_UP via CLI. Use leads reschedule first.'
+      ),
+      { code: 'MISSING_FIELD' }
+    );
+  }
 
   const updated = await prisma.lead.update({
     where: { id },
