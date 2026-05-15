@@ -27,9 +27,17 @@ npm run prisma:migrate  # Create/apply migrations (dev)
 npm run prisma:studio   # Open Prisma Studio GUI
 npm run seed            # Load seed data (admin@crmreferidos.local / admin123)
 
+# Tests (Node built-in runner, no external deps)
+npm test --workspace @crm/backend   # runs phone.test.js + templates.es.test.js
+
 # Quality
 npm run lint
 npm run format
+
+# CLI (follow-up agent tool, used by Claude agent internally)
+npm run cli --workspace @crm/backend -- leads list-due --limit 10
+npm run cli --workspace @crm/backend -- leads send <leadId>
+npm run cli --workspace @crm/backend -- leads note <leadId> --text "..."
 ```
 
 ## Architecture
@@ -42,10 +50,11 @@ npm run format
 **Backend (`apps/backend/src/`):**
 - `app.js` — Express app factory (Helmet, CORS, Morgan, routes)
 - `server.js` — HTTP server entry point
-- `config/env.js` — Validated env vars (single source of truth)
-- `routes/` — Public: `auth`, `health`. Private (all under `/api/private/*` with `requireAuth` middleware): `dashboard`, `leads`, `reports`
+- `config/env.js` — Validated env vars (single source of truth for all env access)
+- `routes/` — Public: `auth`, `health`, `public/whatsapp-webhook`. Private (all under `/api/private/*` with `requireAuth`): `dashboard`, `leads`, `reports`, `follow-up-agent`
 - `controllers/` → `services/` — Thin controllers, business logic in services
 - `middlewares/auth.middleware.js` — `requireAuth` (JWT Bearer) + `requireRole(...roles)`
+- `middlewares/verify-meta-signature.js` — Validates `X-Hub-Signature-256` on inbound WhatsApp webhooks
 - `utils/app-error.js` — `AppError(message, statusCode)` for operational errors; caught by `error-handler.middleware.js`
 - `utils/async-handler.js` — Wraps async route handlers; passes errors to Express error middleware
 
@@ -71,8 +80,49 @@ Key rules enforced in `leads.service.js`:
 - Phone is immutable (unique business identifier for deduplication)
 - `leadNumber` is auto-incremented and display-only
 
+## WhatsApp Integration
+
+Provider pattern in `services/whatsapp/`:
+- `index.js` — singleton factory; picks provider from `WHATSAPP_PROVIDER` env var
+- `noop.provider.js` — default dry-run provider (no network calls)
+- `meta-cloud.provider.js` — Meta Cloud API provider
+- `templates.es.js` — Spanish message template catalog with `getTemplate(status, reason)` and `interpolate(text, vars)`
+
+Inbound webhook at `POST /webhooks/whatsapp` (public, no auth). Signature verified via `verify-meta-signature.js` middleware using `WHATSAPP_APP_SECRET`. On inbound messages the classifier runs (if enabled) and stores a suggested reply on the lead's `ActivityLog`.
+
+## AI Subsystem
+
+**Follow-up agent** (`agent/claude-followup-agent.js` + `jobs/follow-up.scheduler.js`):
+- Runs on cron (default `0 9 * * *` America/Costa_Rica)
+- Three modes via `FOLLOW_UP_AGENT_MODE`: `rule-based` (default), `claude`, `both`
+- `claude` mode: agentic loop powered by Claude; calls the CRM CLI via `spawnSync` (no shell, injection-safe) using skills in `agent/skills/*.md`
+- Always starts in `dryRun=true` unless `FOLLOW_UP_AGENT_DRY_RUN=false`
+
+**Inbound classifier** (`services/inbound-classifier.service.js`):
+- Classifies inbound WhatsApp messages and generates a suggested reply
+- Uses `INBOUND_CLASSIFIER_MODEL` (default `claude-haiku-4-5-20251001`)
+- Enabled only when `INBOUND_CLASSIFIER_ENABLED=true` and `ANTHROPIC_API_KEY` is set
+
 ## Environment
 
-Copy `.env.example` → `.env`. Key vars: `DATABASE_URL`, `PORT=4000`, `FRONTEND_URL=http://localhost:5173`, `JWT_SECRET`, Postgres vars, pgAdmin vars.
+Copy `.env.example` → `.env`. Key vars:
+
+| Var | Purpose |
+|-----|---------|
+| `DATABASE_URL` | Postgres connection string |
+| `PORT` | Backend port (default `4000`) |
+| `FRONTEND_URL` | CORS origin (default `http://localhost:5173`) |
+| `JWT_SECRET` | JWT signing secret |
+| `WHATSAPP_PROVIDER` | `noop` (default) or `meta` |
+| `WHATSAPP_TOKEN` | Meta Cloud API token (required for `meta` provider) |
+| `WHATSAPP_PHONE_NUMBER_ID` | Meta phone number ID |
+| `WHATSAPP_WEBHOOK_VERIFY_TOKEN` | Token for Meta webhook verification challenge |
+| `WHATSAPP_APP_SECRET` | Used to verify `X-Hub-Signature-256` on inbound webhooks |
+| `ANTHROPIC_API_KEY` | Required for `claude` mode agent and inbound classifier |
+| `CLAUDE_AGENT_MODEL` | Model ID for the Claude follow-up agent |
+| `FOLLOW_UP_AGENT_ENABLED` | `true` to activate the scheduler |
+| `FOLLOW_UP_AGENT_MODE` | `rule-based` / `claude` / `both` |
+| `FOLLOW_UP_AGENT_DRY_RUN` | `false` to send real messages (default `true`) |
+| `INBOUND_CLASSIFIER_ENABLED` | `true` to classify inbound WhatsApp messages |
 
 Frontend reads `VITE_API_URL` (defaults to `http://localhost:4000`).
