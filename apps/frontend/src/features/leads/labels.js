@@ -54,6 +54,7 @@ export const activityTypeLabel = {
   STATUS_CHANGED: "Estado del lead",
   NOTE_ADDED: "Nota",
   WHATSAPP_SENT: "WhatsApp enviado",
+  WHATSAPP_RECEIVED: "WhatsApp recibido",
   REMINDER_CREATED: "Recordatorio",
   MEETING_SCHEDULED: "Reunión agendada",
   LEAD_REACTIVATED: "Lead reactivado",

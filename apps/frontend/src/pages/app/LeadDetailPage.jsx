@@ -19,6 +19,7 @@ import {
   toLocalYmd
 } from "../../features/leads/dateUi";
 import { apiFetch } from "../../lib/apiClient";
+import { useAuth } from "../../features/auth/hooks/useAuth";
 
 const TIMELINE_PAGE = 5;
 
@@ -40,9 +41,12 @@ export default function LeadDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
+  const { user } = useAuth();
   const [lead, setLead] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [agentConfig, setAgentConfig] = useState(null);
+  const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
 
   const [newNote, setNewNote] = useState("");
   const [noteError, setNoteError] = useState("");
@@ -98,6 +102,18 @@ export default function LeadDetailPage() {
       setCloseReason((prev) => prev || (lead?.noInvestmentReason ?? ""));
     }
   }, [nextStatus, lead?.noInvestmentReason]);
+
+  useEffect(() => {
+    async function loadAgentConfig() {
+      try {
+        const data = await apiFetch("/api/private/follow-up-agent/config");
+        setAgentConfig(data);
+      } catch {
+        // non-critical — silently ignore
+      }
+    }
+    loadAgentConfig();
+  }, []);
 
   useEffect(() => {
     if (nextStatus === "FOLLOW_UP") {
@@ -192,6 +208,23 @@ export default function LeadDetailPage() {
       toast.error(err.message);
     } finally {
       setIsChangingStatus(false);
+    }
+  }
+
+  async function handleSendWhatsApp() {
+    setIsSendingWhatsApp(true);
+    try {
+      await apiFetch(`/api/private/leads/${id}/whatsapp/send`, {
+        method: "POST",
+        body: JSON.stringify({ dryRun: false })
+      });
+      toast.success("WhatsApp enviado correctamente.");
+      const data = await apiFetch(`/api/private/leads/${id}`);
+      setLead(data.lead);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setIsSendingWhatsApp(false);
     }
   }
 
@@ -398,6 +431,15 @@ export default function LeadDetailPage() {
                   <p className="page-value">{formatDateOnly(lead.nextActionDate)}</p>
                 </div>
               ) : null}
+              {lead.status === "FOLLOW_UP" && agentConfig?.enabled && lead.nextActionDate ? (
+                <div className="rounded-lg border border-sky-800/50 bg-sky-950/30 p-3">
+                  <p className="text-xs font-medium text-sky-200">Agente programado</p>
+                  <p className="mt-1 text-sm text-sky-100">
+                    Enviará WhatsApp el {formatDateOnly(lead.nextActionDate)}
+                    {agentConfig.dryRun ? " (modo simulación)" : ""}.
+                  </p>
+                </div>
+              ) : null}
             </div>
           </Card>
 
@@ -538,6 +580,17 @@ export default function LeadDetailPage() {
                     rows={3}
                   />
                 </label>
+              ) : null}
+
+              {lead.status === "FOLLOW_UP" && user?.role === "ADMIN" ? (
+                <Button
+                  type="button"
+                  variant="ghost-surface"
+                  disabled={isSendingWhatsApp}
+                  onClick={handleSendWhatsApp}
+                >
+                  {isSendingWhatsApp ? "Enviando…" : "Enviar WhatsApp ahora"}
+                </Button>
               ) : null}
 
               {statusError ? <p className="form-error-surface">{statusError}</p> : null}
