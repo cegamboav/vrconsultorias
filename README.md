@@ -163,6 +163,21 @@ Tras cambiar el modelo de estados, aplica migraciones: `npm run prisma:migrate` 
 - Si necesitas reset completo de DB: `npm run db:down:volumes && npm run db:up`
 - Si cambias `schema.prisma`, vuelve a correr `npm run prisma:migrate`
 
+## Módulo WhatsApp (configuración pendiente)
+
+Automatización de seguimiento de leads vía WhatsApp Business API. El módulo detecta leads en estado `FOLLOW_UP` con fecha de acción vencida y envía mensajes contextuales automáticamente.
+
+**Estado actual:** Implementado y listo; pendiente Meta credentials del cliente.
+
+**Activar cuando tengas credenciales:**
+- `WHATSAPP_PROVIDER=meta`
+- `WHATSAPP_TOKEN=` (Meta API token)
+- `WHATSAPP_PHONE_NUMBER_ID=` (Meta phone number ID)
+- `FOLLOW_UP_AGENT_ENABLED=true`
+- `FOLLOW_UP_AGENT_DRY_RUN=false` (false = envíos reales)
+
+**Testear sin credenciales:** `POST /api/private/follow-up-agent/run` con Bearer token (ADMIN). Usa provider `noop` — simula envíos sin conectar a Meta.
+
 ## Proximo paso recomendado
 
 Implementar modulo de autenticacion (usuarios/roles) y CRUD de leads con reglas del pipeline del documento tecnico.

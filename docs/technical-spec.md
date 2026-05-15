@@ -52,11 +52,11 @@ El objetivo principal del sistema es:
 ## No incluye en esta fase
 
 - Aplicación móvil
-- IA
-- WhatsApp API automática
-- Automatizaciones avanzadas
+- IA avanzada (decisiones automáticas basadas en IA)
+- Automatizaciones avanzadas (orquestaciones multi-canal)
 - Integraciones con CRM externos
 - Campañas masivas
+- Dashboard avanzado con predictivos
 
 ---
 
@@ -310,17 +310,49 @@ Resultado:
 
 # 15. Integración WhatsApp
 
-## Fase Inicial
+## Fase Inicial (Implementada)
 
-Uso de links prellenados.
+### Links Prellenados
+Uso de links prellenados accesibles desde el frontend.
 
 Ejemplo:
-
+```
 https://wa.me/506XXXXXXXX?text=Hola...
+```
 
-## Objetivo
+### Automatización de Follow-up (Implementada)
+**Agente de seguimiento automático (WhatsApp Business API)**
 
-Facilitar contacto rápido sin integración compleja.
+Detecta automáticamente leads en estado `FOLLOW_UP` cuya fecha de próxima acción ha vencido y envía mensajes contextuales vía WhatsApp Business API.
+
+**Características:**
+- Mensajes plantilla en español según estado del lead + razón de seguimiento
+- Idempotencia: no reenvía si ya fue enviado (registra metadata `WHATSAPP_SENT`)
+- Scheduler cron (configurable, default 9am diario)
+- Modo simulación (`FOLLOW_UP_AGENT_DRY_RUN=true`) para testing sin credenciales
+- Endpoints REST para disparar manualmente (ADMIN only)
+
+**Configuración:**
+```env
+WHATSAPP_PROVIDER=meta|noop           # Provider (noop default = sin credenciales)
+WHATSAPP_TOKEN=                        # Meta API token
+WHATSAPP_PHONE_NUMBER_ID=              # Meta phone number ID
+FOLLOW_UP_AGENT_ENABLED=false          # true = activa scheduler
+FOLLOW_UP_AGENT_CRON=0 9 * * *         # 9am daily
+FOLLOW_UP_AGENT_TZ=America/Costa_Rica  # Timezone
+FOLLOW_UP_AGENT_DRY_RUN=true           # false = envíos reales
+FOLLOW_UP_AGENT_BATCH_SIZE=50          # Leads por batch
+FOLLOW_UP_AGENT_MODE=rule-based        # rule-based | claude | both
+```
+
+**Estado:** Implementado. Pendiente Meta credentials del cliente para activar envíos reales.
+
+## Objetivos
+
+- Facilitar contacto rápido con links prellenados
+- Automatizar recordatorios de seguimiento
+- Mantener consistencia de mensajes
+- Mejorar tasa de cierre sin esfuerzo manual
 
 ---
 
@@ -654,14 +686,16 @@ Para iniciar correctamente el proyecto se requiere:
 
 ## Fase 2
 
-- WhatsApp Business API
-- Automatización real de mensajes
+- Inbound WhatsApp (webhook para mensajes entrantes del cliente)
+- Classifier de respuestas (IA ligera para detectar interés/objeción)
 - Email automático
-- Dashboard avanzado
-- Métricas inteligentes
-- Asignación de leads
-- Multiusuario avanzado
-- Pipeline múltiple
+- Dashboard avanzado con predictivos
+- Métricas inteligentes (forecasting, scoring)
+- Asignación automática de leads
+- Multiusuario avanzado (equipos, permisos granulares)
+- Pipeline múltiple (diferentes flujos por tipo de negocio)
+- Integración con Calendly API (sincronización de reuniones)
+- Historial de cambios (auditoría completa)
 
 ---
 
