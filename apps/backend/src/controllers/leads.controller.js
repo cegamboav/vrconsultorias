@@ -122,6 +122,11 @@ export const updateSuggestion = asyncHandler(async (req, res) => {
 
   if (!activity) throw new AppError('Activity not found.', 404);
 
+  // Prevent duplicate WHATSAPP_SENT activity if suggestion was already processed
+  if (activity.metadata?.suggestionStatus && activity.metadata.suggestionStatus !== 'pending') {
+    throw new AppError('Suggestion has already been processed.', 409);
+  }
+
   const updatedActivity = await prisma.activity.update({
     where: { id: activityId },
     data: {
