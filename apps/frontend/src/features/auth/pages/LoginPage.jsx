@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
+import VrLogo from "../../../components/brand/VrLogo";
 import Button from "../../../components/ui/Button";
-import Card from "../../../components/ui/Card";
 import Input from "../../../components/ui/Input";
 import PasswordField from "../../../components/ui/PasswordField";
+import { VR_PHONE } from "../../../brand/vrContent";
 import { useAuth } from "../hooks/useAuth";
 
 export default function LoginPage() {
@@ -37,36 +38,71 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="auth-screen page-center px-4">
-      <Card
-        title="Iniciar sesion"
-        subtitle="Accede al CRM de referidos con tu usuario y password."
-      >
-        <form className="stack-md" onSubmit={handleSubmit}>
-          <Input
-            label="Email"
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="tu@email.com"
-            required
-          />
-          <PasswordField
-            label="Password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="********"
-            required
-          />
+    <main className="auth-screen-branded flex min-h-screen flex-col lg:flex-row">
+      <div className="auth-brand-panel">
+        <VrLogo variant="crm" linkTo="/" />
+        <h1 className="mt-10 text-2xl font-semibold leading-tight text-white">
+          Acceso privado del equipo
+        </h1>
+        <p className="mt-4 max-w-sm text-sm leading-relaxed text-slate-300">
+          Herramienta interna de VR Consultorías. Uso exclusivo del equipo autorizado.
+        </p>
+        <p className="mt-auto pt-10 text-sm text-slate-500">
+          <Link to="/" className="text-brand-gold-light hover:text-brand-gold">
+            ← Volver al sitio
+          </Link>
+        </p>
+      </div>
 
-          {error ? <p className="form-error">{error}</p> : null}
+      <div className="auth-form-panel">
+        <div className="mx-auto w-full max-w-md">
+          <div className="mb-8 lg:hidden">
+            <VrLogo variant="crm" linkTo="/" />
+          </div>
 
-          <Button disabled={isSubmitting} type="submit">
-            {isSubmitting ? "Ingresando..." : "Entrar"}
-          </Button>
-        </form>
-      </Card>
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6 shadow-lg sm:p-8">
+            <h2 className="text-xl font-semibold text-white">Acceso privado</h2>
+            <p className="mt-1 text-sm text-slate-400">
+              Ingrese con sus credenciales de equipo.
+            </p>
+
+            <form className="mt-6 stack-md" onSubmit={handleSubmit}>
+              <Input
+                label="Email"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="tu@email.com"
+                required
+              />
+              <PasswordField
+                label="Contraseña"
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="********"
+                required
+              />
+
+              {error ? <p className="form-error">{error}</p> : null}
+
+              <Button disabled={isSubmitting} type="submit" className="w-full">
+                {isSubmitting ? "Ingresando..." : "Entrar"}
+              </Button>
+            </form>
+
+            <p className="mt-6 text-center text-xs text-slate-500">
+              ¿Necesitas ayuda?{" "}
+              <a
+                href={`tel:${VR_PHONE.replace(/\D/g, "")}`}
+                className="text-brand-gold hover:underline"
+              >
+                {VR_PHONE}
+              </a>
+            </p>
+          </div>
+        </div>
+      </div>
     </main>
   );
 }

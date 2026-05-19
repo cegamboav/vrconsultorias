@@ -1,8 +1,13 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
 import LeadForm from "../../features/leads/LeadForm";
 import { apiFetch } from "../../lib/apiClient";
+
+function isLeadClosed(status) {
+  return status === "CLOSED_SUCCESS" || status === "CLOSED_LOST";
+}
 
 export default function EditLeadPage() {
   const { id } = useParams();
@@ -55,12 +60,38 @@ export default function EditLeadPage() {
     return null;
   }
 
+  if (isLeadClosed(lead.status)) {
+    return (
+      <div className="stack-lg max-w-3xl">
+        <div>
+          <Link className="lead-detail-back" to={`/app/leads/${id}`}>
+            ← Volver al detalle
+          </Link>
+          <p className="page-eyebrow mt-3">Leads</p>
+          <h2 className="page-title">
+            Lead #{lead.leadNumber} · {lead.fullName}
+          </h2>
+          <div className="lead-closed-banner mt-4">
+            <p className="font-medium text-slate-100">Lead cerrado · Solo lectura</p>
+            <p className="mt-2 text-sm text-slate-400">
+              La ficha no se puede editar hasta reactivar el lead por pipeline, cuando el estado lo
+              permita.
+            </p>
+          </div>
+          <Button className="mt-6" type="button" onClick={() => navigate(`/app/leads/${id}`)}>
+            Ver detalle del lead
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="stack-lg max-w-3xl">
       <div>
         <p className="page-eyebrow">Leads</p>
         <h2 className="page-title">
-          Editar lead <span className="text-sky-400">#{lead.leadNumber}</span>
+          Editar lead <span className="text-brand-gold">#{lead.leadNumber}</span>
         </h2>
       </div>
       <Card

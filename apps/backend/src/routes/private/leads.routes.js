@@ -6,6 +6,7 @@ const leadsRouter = Router();
 leadsRouter.get("/", leadsController.list);
 leadsRouter.get("/search", leadsController.searchReferrers);
 leadsRouter.post("/", leadsController.create);
+leadsRouter.post("/:id/reopen", leadsController.reopen);
 leadsRouter.post("/:id/follow-up-quick", leadsController.followUpQuick);
 leadsRouter.patch("/:id/status", leadsController.patchStatus);
 leadsRouter.post("/:id/activities", leadsController.createActivity);

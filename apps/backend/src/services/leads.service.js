@@ -27,7 +27,8 @@ const allowedTransitions = {
   // (típicamente después de varios intentos sin respuesta).
   FOLLOW_UP: ["CONTACTED", "SCHEDULED", "CLOSED_SUCCESS", "CLOSED_LOST"],
   CLOSED_SUCCESS: [],
-  CLOSED_LOST: ["FOLLOW_UP", "CONTACTED", "SCHEDULED"]
+  /** Reapertura solo vía POST /leads/:id/reopen (→ CONTACTED). */
+  CLOSED_LOST: []
 };
 
 const legacySourceMap = {
@@ -272,6 +273,13 @@ export async function updateLead({ leadId, userId, payload }) {
   const lead = await prisma.lead.findUnique({ where: { id: leadId } });
   ensureLeadExists(lead);
 
+  if (isClosedStatus(lead.status)) {
+    throw new AppError(
+      "Este lead está cerrado y la ficha no admite modificaciones hasta reactivarlo por pipeline (si el flujo lo permite).",
+      403
+    );
+  }
+
   const nextRefId =
     payload.referredByLeadId === undefined
       ? lead.referredByLeadId
@@ -464,6 +472,19 @@ export async function changeLeadStatus({ leadId, userId, payload }) {
     return await getLeadById(leadId);
   }
 
+  if (lead.status === LeadStatus.CLOSED_LOST) {
+    throw new AppError(
+      "Este lead no concretado solo puede reabrirse con la acción «Reabrir lead» (→ Contactado).",
+      403
+    );
+  }
+  if (lead.status === LeadStatus.CLOSED_SUCCESS) {
+    throw new AppError(
+      "Un lead concretado no puede cambiar de estado. Crea un lead nuevo si el cliente vuelve.",
+      403
+    );
+  }
+
   validateStatusTransition(lead.status, status);
 
   if (status === LeadStatus.CLOSED_LOST) {
@@ -510,9 +531,8 @@ export async function changeLeadStatus({ leadId, userId, payload }) {
   let nextClosedAt = lead.closedAt;
   if (isClosedStatus(status)) {
     nextClosedAt = now;
-  } else if (isClosedStatus(lead.status)) {
-    nextClosedAt = null;
   }
+  // Al salir de cerrado (p. ej. reabrir): conservar closedAt para métricas e historial.
 
   let nextNoReason = lead.noInvestmentReason;
   if (status === LeadStatus.CLOSED_LOST) {
@@ -573,6 +593,68 @@ export async function changeLeadStatus({ leadId, userId, payload }) {
 }
 
 const quickFollowUpDays = new Set([7, 15, 30, 90]);
+
+/**
+ * Reabre un lead CLOSED_LOST → CONTACTED (reinicio comercial simple).
+ * Conserva closedAt, timeline y motivo de no concretado.
+ */
+export async function reopenLostLead({ leadId, userId, payload }) {
+  const lead = await prisma.lead.findUnique({ where: { id: leadId } });
+  ensureLeadExists(lead);
+
+  if (lead.status === LeadStatus.CLOSED_SUCCESS) {
+    throw new AppError(
+      "Un lead concretado no puede reabrirse. Registra un lead nuevo si el cliente vuelve.",
+      400
+    );
+  }
+  if (lead.status !== LeadStatus.CLOSED_LOST) {
+    throw new AppError("Solo se pueden reabrir leads cerrados como no concretados.", 400);
+  }
+
+  const reasonText =
+    payload?.reason !== undefined && payload?.reason !== null
+      ? String(payload.reason).trim()
+      : "";
+
+  const previousClosedAt = lead.closedAt ? lead.closedAt.toISOString() : null;
+  let statusDescription = "Lead reabierto y enviado a Contactado.";
+  if (reasonText) {
+    statusDescription += `\nMotivo: ${reasonText}`;
+  }
+
+  const now = new Date();
+
+  await prisma.$transaction(async (tx) => {
+    await tx.lead.update({
+      where: { id: leadId },
+      data: {
+        status: LeadStatus.CONTACTED,
+        followUpReason: null,
+        nextActionDate: null,
+        lastActivityAt: now
+      }
+    });
+
+    await tx.activity.create({
+      data: {
+        leadId,
+        userId,
+        type: ActivityType.LEAD_REACTIVATED,
+        description: statusDescription,
+        metadata: {
+          action: "LEAD_REOPENED",
+          from: LeadStatus.CLOSED_LOST,
+          to: LeadStatus.CONTACTED,
+          previousClosedAt,
+          ...(reasonText ? { reopenReason: reasonText } : {})
+        }
+      }
+    });
+  });
+
+  return await getLeadById(leadId);
+}
 
 export async function applyFollowUpQuick({
   leadId,

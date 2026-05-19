@@ -1,4 +1,5 @@
-import { NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
+import VrLogo from "../../components/brand/VrLogo";
 import { navForRole } from "../config/navigation";
 import { useAuth } from "../../features/auth/hooks/useAuth";
 
@@ -27,11 +28,11 @@ export default function Sidebar({ isOpen, onCloseBackdrop }) {
         className={`app-sidebar ${isOpen ? "" : "app-sidebar--closed"}`}
         aria-label="Navegación principal"
       >
-        <div className="app-sidebar-header">
-          <div className="min-w-0">
-            <p className="app-sidebar-brand">VR Consultorías</p>
-            <p className="app-sidebar-tagline">Plataforma</p>
-          </div>
+        <div className="app-sidebar-header flex flex-col gap-1 px-4 py-4">
+          <VrLogo variant="crm" linkTo="/" className="origin-left scale-[0.92]" />
+          <p className="text-[10px] font-medium uppercase tracking-wider text-slate-500">
+            CRM Referidos
+          </p>
         </div>
 
         <nav className="app-sidebar-nav">
@@ -57,7 +58,13 @@ export default function Sidebar({ isOpen, onCloseBackdrop }) {
           </div>
         ) : null}
 
-        <div className="sidebar-footer">
+        <div className="sidebar-footer space-y-2">
+          <Link
+            to="/"
+            className="flex w-full items-center justify-center rounded-lg border border-slate-700/80 px-3 py-2 text-xs font-medium text-slate-400 transition hover:border-slate-600 hover:text-slate-200"
+          >
+            Sitio VR Consultorías
+          </Link>
           <button type="button" className="sidebar-logout" onClick={handleLogout}>
             Cerrar sesión
           </button>

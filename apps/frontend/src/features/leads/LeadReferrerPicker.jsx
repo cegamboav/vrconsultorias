@@ -30,12 +30,12 @@ export default function LeadReferrerPicker({ excludeLeadId, selected, onSelected
       {selected ? (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2">
           <span className="text-sm text-slate-200">
-            <span className="font-semibold text-sky-400">#{selected.leadNumber}</span> ·{" "}
+            <span className="font-semibold text-brand-gold">#{selected.leadNumber}</span> ·{" "}
             {selected.fullName} · <span className="text-slate-500">{selected.phone}</span>
           </span>
           <button
             type="button"
-            className="text-xs font-medium text-sky-400 hover:text-sky-300 hover:underline"
+            className="text-xs font-medium text-brand-gold hover:text-brand-gold-light hover:underline"
             onClick={() => onSelectedChange(null)}
           >
             Quitar
@@ -67,7 +67,7 @@ export default function LeadReferrerPicker({ excludeLeadId, selected, onSelected
                       setResults([]);
                     }}
                   >
-                    <span className="font-semibold text-sky-400">#{lead.leadNumber}</span> · {lead.fullName}{" "}
+                    <span className="font-semibold text-brand-gold">#{lead.leadNumber}</span> · {lead.fullName}{" "}
                     <span className="text-slate-500">{lead.phone}</span>
                   </button>
                 </li>

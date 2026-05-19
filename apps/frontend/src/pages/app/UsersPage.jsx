@@ -22,7 +22,7 @@ function RoleBadge({ role }) {
     <span
       className={
         isAdmin
-          ? "inline-flex items-center rounded-md border border-sky-700/60 bg-sky-950/40 px-2 py-0.5 text-xs font-medium text-sky-200"
+          ? "inline-flex items-center rounded-md border border-brand-gold/40 bg-brand-navy/40 px-2 py-0.5 text-xs font-medium text-brand-gold-light"
           : "inline-flex items-center rounded-md border border-slate-700/70 bg-slate-900/60 px-2 py-0.5 text-xs font-medium text-slate-300"
       }
     >
