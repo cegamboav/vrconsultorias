@@ -56,52 +56,61 @@ export class MetaCloudWhatsAppProvider extends WhatsAppProvider {
   async sendTemplate({ to, templateKey, variables, leadId }) {
     const { fullName = '', ownerName = '', calendlyUrl = '' } = variables ?? {};
 
-    // TODO: uncomment when real credentials arrive and remove the stub below.
-    // const response = await fetch(this.baseUrl, {
-    //   method: 'POST',
-    //   headers: {
-    //     Authorization: `Bearer ${this.token}`,
-    //     'Content-Type': 'application/json',
-    //   },
-    //   body: JSON.stringify({
-    //     messaging_product: 'whatsapp',
-    //     to: to.replace(/^\+/, ''),
-    //     type: 'template',
-    //     template: {
-    //       name: templateKey,
-    //       language: { code: 'es' },
-    //       components: [
-    //         {
-    //           type: 'body',
-    //           parameters: [
-    //             { type: 'text', text: fullName },
-    //             { type: 'text', text: ownerName },
-    //             { type: 'text', text: calendlyUrl },
-    //           ],
-    //         },
-    //       ],
-    //     },
-    //   }),
-    // });
-    // if (!response.ok) {
-    //   const err = await response.json().catch(() => ({}));
-    //   throw new AppError(`Meta Cloud API error: ${JSON.stringify(err)}`, 502);
-    // }
-    // const data = await response.json();
-    // return {
-    //   providerMessageId: data.messages?.[0]?.id ?? null,
-    //   status: 'SENT',
-    //   raw: data,
-    // };
+    let response;
+    try {
+      response = await fetch(this.baseUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          to: to.replace(/^\+/, ''),
+          type: 'template',
+          template: {
+            name: templateKey,
+            language: { code: 'es' },
+            components: [
+              {
+                type: 'body',
+                parameters: [
+                  { type: 'text', text: fullName },
+                  { type: 'text', text: ownerName },
+                  { type: 'text', text: calendlyUrl },
+                ],
+              },
+            ],
+          },
+        }),
+      });
+    } catch (networkErr) {
+      console.error(`[WhatsApp:META] network error leadId=${leadId}:`, networkErr);
+      throw new AppError(`Meta Cloud API unreachable: ${networkErr.message}`, 502);
+    }
 
-    // STUB — real HTTP call is documented above, awaiting client credentials.
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      const errCode = data?.error?.code ?? response.status;
+      const errMsg = data?.error?.message ?? 'unknown';
+      console.error(
+        `[WhatsApp:META] error leadId=${leadId} to=${to} template=${templateKey} code=${errCode} msg=${errMsg}`
+      );
+      throw new AppError(
+        `Meta Cloud API error (${errCode}): ${errMsg}`,
+        response.status >= 500 ? 502 : 400
+      );
+    }
+
+    const providerMessageId = data.messages?.[0]?.id ?? null;
     console.log(
-      `[WhatsApp:META] leadId=${leadId} to=${to} template=${templateKey} variables=${JSON.stringify({ fullName, ownerName, calendlyUrl })}`
+      `[WhatsApp:META] sent leadId=${leadId} to=${to} template=${templateKey} wamid=${providerMessageId}`
     );
     return {
-      providerMessageId: null,
-      status: 'STUB', // Will become 'SENT' when the real fetch call is enabled
-      raw: null,
+      providerMessageId,
+      status: 'SENT',
+      raw: data,
     };
   }
 }
