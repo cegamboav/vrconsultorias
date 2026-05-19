@@ -1,12 +1,13 @@
 /** Textos en español para descripciones de actividad (MVP). */
 
-export const statusLabelEs = {
+/** Etiquetas cortas para cambios de estado en bitácora (neutras, reproducibles). */
+export const statusChangeTimelineLabelEs = {
   NEW: "Nuevo",
   CONTACTED: "Contactado",
-  SCHEDULED: "Reunión agendada",
+  SCHEDULED: "Agendado",
   FOLLOW_UP: "Seguimiento",
-  CLOSED_INVESTED: "Cerró · Invirtió",
-  CLOSED_NOT_INVESTED: "Cerró · No invirtió"
+  CLOSED_SUCCESS: "Concretado",
+  CLOSED_LOST: "No concretado"
 };
 
 export const followUpReasonLabelEs = {
@@ -18,24 +19,10 @@ export const followUpReasonLabelEs = {
   OTHER: "Otro"
 };
 
-const transitionMessage = {
-  "NEW->CONTACTED": "Primer contacto con el lead.",
-  "CONTACTED->SCHEDULED": "Reunión agendada.",
-  "CONTACTED->FOLLOW_UP": "Paso a seguimiento futuro (sin reunión previa).",
-  "SCHEDULED->CLOSED_INVESTED": "Cierre registrado: invirtió.",
-  "SCHEDULED->CLOSED_NOT_INVESTED": "Cierre registrado: no invirtió.",
-  "FOLLOW_UP->CONTACTED": "Lead reactivado desde seguimiento: de vuelta en contacto.",
-  "FOLLOW_UP->SCHEDULED": "Lead reactivado desde seguimiento: reunión agendada.",
-  "CLOSED_NOT_INVESTED->FOLLOW_UP": "Lead reactivado con seguimiento futuro.",
-  "CLOSED_NOT_INVESTED->CONTACTED": "Lead reactivado desde cierre sin inversión.",
-  "CLOSED_NOT_INVESTED->SCHEDULED": "Lead reactivado con reunión agendada."
-};
-
-export function formatStatusChangeDescription(from, to) {
-  const key = `${from}->${to}`;
-  if (Object.prototype.hasOwnProperty.call(transitionMessage, key)) {
-    return transitionMessage[key];
-  }
-  const label = statusLabelEs[to] ?? to;
-  return `Estado del lead actualizado a «${label}».`;
+/**
+ * Mensaje neutro por destino del estado (válido aunque el lead vuelva al mismo estado luego).
+ */
+export function formatStatusChangeDescription(_from, to) {
+  const label = statusChangeTimelineLabelEs[to] ?? to;
+  return `Se cambió el estado a ${label}.`;
 }

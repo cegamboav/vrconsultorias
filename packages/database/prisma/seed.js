@@ -3,7 +3,29 @@ import bcrypt from "bcrypt";
 
 const prisma = new PrismaClient();
 
+const DEFAULT_SERVICE_CATEGORIES = [
+  { id: "svc_inversiones", name: "Inversiones", slug: "inversiones", color: "#6B9BD1" },
+  { id: "svc_charlas", name: "Charlas", slug: "charlas", color: "#9B7ED4" },
+  { id: "svc_contabilidad", name: "Contabilidad", slug: "contabilidad", color: "#5DAA8A" }
+];
+
+async function seedServiceCategories() {
+  for (const cat of DEFAULT_SERVICE_CATEGORIES) {
+    await prisma.serviceCategory.upsert({
+      where: { slug: cat.slug },
+      update: { name: cat.name, color: cat.color, isActive: true },
+      create: { ...cat, isActive: true }
+    });
+  }
+  return prisma.serviceCategory.findFirst({ where: { slug: "inversiones" } });
+}
+
 async function main() {
+  await seedServiceCategories();
+  const defaultService = await prisma.serviceCategory.findFirst({
+    where: { slug: "inversiones" }
+  });
+
   const adminPasswordHash = await bcrypt.hash("admin123", 10);
 
   const admin = await prisma.user.upsert({
@@ -25,13 +47,14 @@ async function main() {
     where: { phone: "50670000000" }
   });
 
-  if (!existingLead) {
+  if (!existingLead && defaultService) {
     const lead = await prisma.lead.create({
       data: {
         fullName: "Juan Perez",
         phone: "50670000000",
         email: "juan@example.com",
         source: LeadSource.REFERIDO,
+        serviceCategoryId: defaultService.id,
         status: LeadStatus.NEW,
         ownerId: admin.id,
         activities: {

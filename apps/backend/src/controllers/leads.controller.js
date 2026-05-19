@@ -8,6 +8,7 @@ import {
   createLead,
   getLeadById,
   listLeads,
+  reopenLostLead,
   searchLeadsForReferrer,
   updateLead
 } from "../services/leads.service.js";
@@ -50,6 +51,15 @@ export const patchStatus = asyncHandler(async (req, res) => {
     leadId: req.params.id,
     userId: req.user.id,
     payload: req.body
+  });
+  res.status(200).json({ lead });
+});
+
+export const reopen = asyncHandler(async (req, res) => {
+  const lead = await reopenLostLead({
+    leadId: req.params.id,
+    userId: req.user.id,
+    payload: req.body ?? {}
   });
   res.status(200).json({ lead });
 });

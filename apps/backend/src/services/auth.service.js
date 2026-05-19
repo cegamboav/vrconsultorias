@@ -14,6 +14,13 @@ export async function loginWithEmailPassword({ email, password }) {
     throw new AppError("Credenciales invalidas.", 401);
   }
 
+  if (!user.isActive) {
+    throw new AppError(
+      "Cuenta desactivada. Solicita a un administrador que la reactive.",
+      403
+    );
+  }
+
   const token = signAccessToken({ sub: user.id, role: user.role });
 
   return {
@@ -22,7 +29,8 @@ export async function loginWithEmailPassword({ email, password }) {
       id: user.id,
       name: user.name,
       email: user.email,
-      role: user.role
+      role: user.role,
+      isActive: user.isActive
     }
   };
 }

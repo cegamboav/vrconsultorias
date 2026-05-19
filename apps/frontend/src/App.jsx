@@ -10,6 +10,9 @@ import EditLeadPage from "./pages/app/EditLeadPage";
 import LeadDetailPage from "./pages/app/LeadDetailPage";
 import LeadsPage from "./pages/app/LeadsPage";
 import ReportsPage from "./pages/app/ReportsPage";
+import UsersPage from "./pages/app/UsersPage";
+import SettingsPage from "./pages/app/SettingsPage";
+import LandingPage from "./pages/marketing/LandingPage";
 
 export default function App() {
   return (
@@ -37,9 +40,18 @@ export default function App() {
             <Route path="leads/:id" element={<LeadDetailPage />} />
             <Route path="pipeline" element={<Navigate to="/app/dashboard" replace />} />
             <Route path="reportes" element={<ReportsPage />} />
+            <Route path="configuracion" element={<SettingsPage />} />
+            <Route
+              path="usuarios"
+              element={
+                <ProtectedRoute roles={["ADMIN"]}>
+                  <UsersPage />
+                </ProtectedRoute>
+              }
+            />
           </Route>
-          <Route path="/" element={<Navigate to="/app/dashboard" replace />} />
-          <Route path="*" element={<Navigate to="/app/dashboard" replace />} />
+          <Route path="/" element={<LandingPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
       </ToastProvider>

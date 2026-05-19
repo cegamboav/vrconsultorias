@@ -15,7 +15,13 @@ export function formatActivityDescription(activity) {
     return t;
   }
 
-  if (activity.type === "STATUS_CHANGED") {
+  if (activity.type === "LEAD_REACTIVATED" || activity.type === "STATUS_CHANGED") {
+    if (/^Lead reabierto y enviado a /i.test(raw)) {
+      return raw;
+    }
+    if (/^Se cambió el estado a /i.test(raw)) {
+      return raw;
+    }
     const m = /^Estado:\s*(.+?)\s*→\s*(.+)$/.exec(raw);
     if (m) {
       return `Flujo: de «${m[1].trim()}» a «${m[2].trim()}».`;

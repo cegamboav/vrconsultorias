@@ -11,6 +11,9 @@ import privateDashboardRouter from "./routes/private/dashboard.routes.js";
 import privateLeadsRouter from "./routes/private/leads.routes.js";
 import privateReportsRouter from "./routes/private/reports.routes.js";
 import privateFollowUpAgentRouter from "./routes/private/follow-up-agent.routes.js";
+import privateUsersRouter from "./routes/private/users.routes.js";
+import privateServiceCategoriesRouter from "./routes/private/service-categories.routes.js";
+import privateProfileRouter from "./routes/private/profile.routes.js";
 import webhookRouter from "./routes/public/whatsapp-webhook.routes.js";
 
 const app = express();
@@ -51,6 +54,9 @@ app.use("/api/private/dashboard", requireAuth, privateDashboardRouter);
 app.use("/api/private/leads", requireAuth, privateLeadsRouter);
 app.use("/api/private/reports", requireAuth, privateReportsRouter);
 app.use("/api/private/follow-up-agent", requireAuth, privateFollowUpAgentRouter);
+app.use("/api/private/users", requireAuth, privateUsersRouter);
+app.use("/api/private/service-categories", requireAuth, privateServiceCategoriesRouter);
+app.use("/api/private/profile", requireAuth, privateProfileRouter);
 app.get("/api/protected", requireAuth, (req, res) => {
   res.status(200).json({
     message: "Ruta protegida activa.",

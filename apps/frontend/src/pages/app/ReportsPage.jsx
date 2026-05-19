@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import Card from "../../components/ui/Card";
+import ServiceCategoryBadge from "../../components/ui/ServiceCategoryBadge";
 import StatusBadge from "../../components/ui/StatusBadge";
 import {
   followUpReasonLabel,
@@ -20,8 +21,8 @@ const STATUS_ORDER = [
   "CONTACTED",
   "SCHEDULED",
   "FOLLOW_UP",
-  "CLOSED_INVESTED",
-  "CLOSED_NOT_INVESTED"
+  "CLOSED_SUCCESS",
+  "CLOSED_LOST"
 ];
 
 const SOURCE_ORDER = ["REFERIDO", "DIRECTO", "PAGINA_WEB", "REDES_SOCIALES", "OTRO"];
@@ -140,12 +141,20 @@ export default function ReportsPage() {
     return Math.max(0, ...Object.values(data.leadsBySource));
   }, [data]);
 
+  const serviceMax = useMemo(() => {
+    const list = data?.leadsByService ?? [];
+    if (!list.length) return 0;
+    return Math.max(0, ...list.map((s) => s.count ?? 0));
+  }, [data?.leadsByService]);
+
   const reasonMax = useMemo(() => {
     if (!data?.followUpReasons) return 0;
     return Math.max(0, ...Object.values(data.followUpReasons));
   }, [data]);
 
   const rangeDescription = describeRange(rangeKey, range);
+  const leadsByService = data?.leadsByService ?? [];
+  const conversionByService = data?.conversionByService ?? [];
 
   return (
     <div className="stack-lg">
@@ -177,10 +186,10 @@ export default function ReportsPage() {
             <h3 className="dashboard-section-title mb-3">Conversión general</h3>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <KpiCard label="Total leads (creados)" value={data.conversion.totalLeads ?? 0} />
-              <KpiCard label="Invirtieron (cerrados)" value={data.conversion.totalInvested ?? 0} />
+              <KpiCard label="Concretados (cerrados)" value={data.conversion.totalConcreted ?? 0} />
               <KpiCard
-                label="No invirtieron (cerrados)"
-                value={data.conversion.totalNotInvested ?? 0}
+                label="No concretados (cerrados)"
+                value={data.conversion.totalNotConcreted ?? 0}
               />
               <KpiCard
                 label="Tasa de conversión"
@@ -208,6 +217,28 @@ export default function ReportsPage() {
           </section>
 
           <div className="grid gap-6 lg:grid-cols-2">
+            {/* Leads por servicio */}
+            <Card
+              variant="surface"
+              title="Leads por servicio"
+              subtitle="Distribución por línea de negocio en el período."
+            >
+              <div className="stack-md">
+                {leadsByService.map((svc) => (
+                  <BarRow
+                    key={svc.id}
+                    label={svc.name}
+                    count={svc.count ?? 0}
+                    total={serviceMax}
+                    accent="report-bar-fill--source"
+                  />
+                ))}
+                {leadsByService.length === 0 ? (
+                  <p className="text-app-muted text-sm">Sin datos de servicios.</p>
+                ) : null}
+              </div>
+            </Card>
+
             {/* Leads por fuente */}
             <Card
               variant="surface"
@@ -255,6 +286,34 @@ export default function ReportsPage() {
             </Card>
           </div>
 
+          <Card
+            variant="surface"
+            title="Conversión por servicio"
+            subtitle="Tasa de concretados sobre leads creados en el período."
+          >
+            <div className="stack-md">
+              {conversionByService.map((row) => (
+                <div
+                  key={row.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-700/60 bg-slate-900/40 px-3 py-2"
+                >
+                  <ServiceCategoryBadge category={row} />
+                  <div className="text-right text-sm">
+                    <p className="font-semibold text-slate-100">
+                      {formatPercent(row.conversionRate)}
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      {row.totalConcreted ?? 0} / {row.totalLeads ?? 0} leads
+                    </p>
+                  </div>
+                </div>
+              ))}
+              {conversionByService.length === 0 ? (
+                <p className="text-app-muted text-sm">Sin datos en este rango.</p>
+              ) : null}
+            </div>
+          </Card>
+
           {/* Top referidores */}
           <Card
             variant="surface"
@@ -271,7 +330,7 @@ export default function ReportsPage() {
                       <th>Referidor</th>
                       <th>Teléfono</th>
                       <th className="text-right">Referidos</th>
-                      <th className="text-right">Invirtieron</th>
+                      <th className="text-right">Concretados</th>
                       <th className="text-right">Tasa</th>
                     </tr>
                   </thead>
@@ -279,7 +338,7 @@ export default function ReportsPage() {
                     {data.topReferrers.map((row) => {
                       const rate =
                         row.referredCount > 0
-                          ? Math.round((row.investedCount / row.referredCount) * 1000) / 10
+                          ? Math.round((row.successCount / row.referredCount) * 1000) / 10
                           : 0;
                       return (
                         <tr key={row.referrerId}>
@@ -293,7 +352,7 @@ export default function ReportsPage() {
                           </td>
                           <td className="text-slate-400">{row.phone}</td>
                           <td className="text-right text-slate-200">{row.referredCount}</td>
-                          <td className="text-right text-slate-200">{row.investedCount}</td>
+                          <td className="text-right text-slate-200">{row.successCount}</td>
                           <td className="text-right text-slate-300">{formatPercent(rate)}</td>
                         </tr>
                       );

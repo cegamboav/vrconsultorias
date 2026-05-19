@@ -49,7 +49,7 @@
   }
 
   .app-sidebar-brand {
-    @apply text-lg font-semibold tracking-tight text-sky-400;
+    @apply text-lg font-semibold tracking-tight text-brand-gold;
   }
 
   .app-sidebar-tagline {
@@ -65,7 +65,7 @@
   }
 
   .sidebar-link-active {
-    @apply bg-sky-500/15 text-sky-300;
+    @apply bg-brand-gold/15 text-brand-gold-light;
   }
 
   .sidebar-footer {
@@ -153,11 +153,39 @@
   }
 
   .lead-detail-kicker {
-    @apply text-sm font-semibold tracking-wide text-sky-400;
+    @apply text-sm font-semibold tracking-wide text-brand-gold;
   }
 
   .lead-detail-meta-row {
     @apply mt-3 flex flex-wrap items-center gap-2;
+  }
+
+  .lead-closed-banner {
+    @apply rounded-xl border border-amber-800/45 bg-amber-950/25 px-4 py-3;
+  }
+
+  .lead-closed-pill {
+    @apply inline-flex items-center rounded-full border border-amber-700/55 bg-amber-950/50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-100;
+  }
+
+  .app-modal-backdrop {
+    @apply fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm;
+  }
+
+  .app-modal-panel {
+    @apply w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-2xl shadow-black/50;
+  }
+
+  .app-modal-title {
+    @apply text-lg font-semibold text-slate-100;
+  }
+
+  .app-modal-body {
+    @apply mt-2 text-sm text-slate-300;
+  }
+
+  .app-modal-actions {
+    @apply mt-6 flex flex-wrap justify-end gap-3;
   }
 
   /* Table (MVP) */
@@ -178,7 +206,7 @@
   }
 
   .table-row-link {
-    @apply font-medium text-sky-400 hover:text-sky-300 hover:underline;
+    @apply font-medium text-brand-gold hover:text-brand-gold-light hover:underline;
   }
 
   /* Badges */
@@ -297,7 +325,7 @@
   }
 
   .dashboard-lead-card {
-    @apply block rounded-lg border border-slate-700/80 bg-slate-800/60 px-2.5 py-2 text-left transition hover:border-sky-500/60 hover:bg-slate-800;
+    @apply block rounded-lg border border-slate-700/80 bg-slate-800/60 px-2.5 py-2 text-left transition hover:border-brand-gold/50 hover:bg-slate-800;
   }
 
   .dashboard-lead-name {
@@ -305,7 +333,7 @@
   }
 
   .dashboard-lead-id {
-    @apply font-semibold text-sky-400/95;
+    @apply font-semibold text-brand-gold/95;
   }
 
   .dashboard-lead-sep {
@@ -353,7 +381,7 @@
   }
 
   .dashboard-activity-lead-link {
-    @apply text-xs font-medium text-sky-400 hover:text-sky-300 hover:underline;
+    @apply text-xs font-medium text-brand-gold hover:text-brand-gold-light hover:underline;
   }
 
   .dashboard-activity-text {
@@ -407,11 +435,24 @@
   }
 
   .input {
-    @apply h-11 rounded-lg border border-slate-700 bg-slate-950 px-3 text-sm text-slate-100 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/25;
+    @apply h-11 rounded-lg border border-slate-700 bg-slate-950 px-3 text-sm text-slate-100 outline-none transition focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/25;
   }
 
   .input-error {
     @apply border-rose-500 focus:border-rose-500 focus:ring-rose-500/25;
+  }
+
+  .password-field-wrap {
+    @apply relative flex w-full items-stretch;
+  }
+
+  .password-field-wrap .password-field-input {
+    @apply pr-11;
+  }
+
+  .password-field-reveal {
+    @apply absolute right-1.5 top-1/2 z-10 -translate-y-1/2 select-none rounded-md p-2 text-slate-400 outline-none ring-brand-gold/40 transition hover:text-slate-100 focus-visible:ring-2 active:text-brand-gold-light disabled:pointer-events-none disabled:opacity-40;
+    touch-action: none;
   }
 
   .form-error {
@@ -423,7 +464,7 @@
   }
 
   .input-surface {
-    @apply h-11 rounded-lg border border-slate-700 bg-slate-950 px-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30;
+    @apply h-11 rounded-lg border border-slate-700 bg-slate-950 px-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/30;
   }
 
   .input-error-surface {
@@ -435,7 +476,7 @@
   }
 
   .textarea-surface {
-    @apply min-h-[96px] w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30;
+    @apply min-h-[96px] w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/30;
   }
 
   .btn {
@@ -443,7 +484,7 @@
   }
 
   .btn-primary {
-    @apply bg-sky-500 text-white hover:bg-sky-400;
+    @apply bg-brand-navy-mid text-white hover:bg-brand-primary-hover;
   }
 
   .btn-ghost {
@@ -482,6 +523,11 @@
   /* Chip discreto para el conteo de seguimientos (Seg. ×N) */
   .followup-count-chip {
     @apply inline-flex items-center rounded-md border border-slate-700/70 bg-slate-900/70 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-300;
+  }
+
+  /* Badge de servicio (multiservicio) */
+  .service-category-badge {
+    @apply inline-flex shrink-0 items-center rounded-md border px-2 py-0.5 text-[11px] font-medium;
   }
 
   /* === Reportes === */
@@ -526,11 +572,11 @@
   }
 
   .report-bar-fill--default {
-    @apply bg-sky-500/70;
+    @apply bg-brand-gold/70;
   }
 
   .report-bar-fill--source {
-    @apply bg-sky-500/70;
+    @apply bg-brand-gold/70;
   }
 
   .report-bar-fill--reason {
@@ -574,6 +620,52 @@
     @apply font-medium text-slate-200;
   }
 
+  .settings-tabs {
+    @apply flex flex-wrap gap-2 border-b border-slate-800 pb-3;
+  }
+
+  .settings-tab {
+    @apply inline-flex h-9 items-center rounded-lg border border-transparent px-4 text-sm font-medium text-slate-400 transition hover:text-slate-200;
+  }
+
+  .settings-tab--active {
+    @apply border-slate-700/80 bg-slate-900/80 text-slate-100;
+  }
+
+  .settings-readonly-hint {
+    @apply rounded-lg border border-slate-700/60 bg-slate-900/50 px-3 py-2 text-xs text-slate-400;
+  }
+
+  /* Bloque de usuario en el sidebar */
+  .app-sidebar-user {
+    @apply mt-auto border-t border-slate-800 px-4 py-3;
+  }
+
+  .app-sidebar-user-name {
+    @apply text-sm font-semibold text-slate-100;
+  }
+
+  .app-sidebar-user-meta {
+    @apply mt-0.5 text-xs text-slate-400;
+  }
+
+  /* Actor prominente en timelines (auditoría colaborativa) */
+  .timeline-actor {
+    @apply text-sm font-semibold text-slate-100;
+  }
+
+  .timeline-subtype {
+    @apply mt-1 text-[11px] uppercase tracking-wide text-slate-500;
+  }
+
+  .dashboard-activity-actor {
+    @apply font-semibold text-slate-200;
+  }
+
+  .dashboard-activity-sep {
+    @apply text-slate-600;
+  }
+
   /* Toast stack (esquina superior derecha) */
   .toast-stack {
     @apply pointer-events-none fixed right-4 top-4 z-50 flex w-full max-w-sm flex-col gap-2;
@@ -613,5 +705,289 @@
 
   .toast-close {
     @apply -mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-lg leading-none text-slate-400 transition hover:bg-slate-800 hover:text-slate-100;
+  }
+
+  /* —— Marketing / VR Consultorías landing —— */
+  .marketing-page {
+    @apply min-h-screen bg-white text-slate-800 antialiased;
+  }
+
+  .marketing-container {
+    @apply mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8;
+  }
+
+  .marketing-header {
+    @apply sticky top-0 z-50 border-b border-slate-200/60 bg-white/90 shadow-sm shadow-slate-900/5 backdrop-blur-lg;
+  }
+
+  .marketing-nav-link {
+    @apply text-sm font-medium text-slate-600 transition hover:text-brand-navy;
+  }
+
+  .marketing-menu-btn {
+    @apply inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200/80 text-brand-navy transition hover:border-slate-300 hover:bg-slate-50;
+  }
+
+  .marketing-private-link {
+    @apply text-xs font-medium text-slate-500 underline-offset-2 transition hover:text-brand-navy-mid hover:underline;
+  }
+
+  .marketing-btn-primary {
+    @apply inline-flex h-12 items-center justify-center rounded-xl bg-brand-navy-mid px-6 text-sm font-semibold text-white shadow-vr transition hover:-translate-y-0.5 hover:bg-brand-primary-hover hover:shadow-lg;
+  }
+
+  .marketing-btn-ghost {
+    @apply inline-flex h-12 items-center justify-center rounded-xl border border-white/25 bg-white/5 px-5 text-sm font-medium text-slate-100 backdrop-blur-sm transition hover:bg-white/10;
+  }
+
+  .marketing-btn-outline-light {
+    @apply inline-flex h-12 items-center justify-center rounded-xl border border-white/45 px-6 text-sm font-semibold text-white transition hover:bg-white/10;
+  }
+
+  .marketing-hero {
+    @apply relative overflow-hidden py-20 text-white md:py-28 lg:py-32;
+  }
+
+  .marketing-hero-bg {
+    @apply pointer-events-none absolute inset-0 bg-gradient-to-br from-brand-navy via-brand-navy-mid to-[#123d6b];
+  }
+
+  .marketing-hero-bg::before {
+    content: "";
+    @apply absolute -right-24 -top-24 h-80 w-80 rounded-full bg-brand-gold/10 blur-3xl;
+  }
+
+  .marketing-hero-bg::after {
+    content: "";
+    @apply absolute -bottom-32 -left-16 h-96 w-96 rounded-full bg-white/5 blur-3xl;
+  }
+
+  .marketing-hero-inner {
+    @apply relative z-10 grid items-center gap-12 lg:grid-cols-[1.1fr_0.9fr] lg:gap-16;
+  }
+
+  .marketing-hero-content {
+    @apply max-w-2xl;
+  }
+
+  .marketing-eyebrow {
+    @apply text-xs font-semibold uppercase tracking-[0.2em] text-brand-gold-light;
+  }
+
+  .marketing-hero-title {
+    @apply mt-4 text-3xl font-bold leading-[1.12] tracking-tight md:text-4xl lg:text-[2.75rem];
+  }
+
+  .marketing-hero-lead {
+    @apply mt-5 max-w-xl text-base leading-relaxed text-slate-200/95 md:text-lg;
+  }
+
+  .marketing-hero-actions {
+    @apply mt-9 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center;
+  }
+
+  .marketing-hero-aside {
+    @apply lg:justify-self-end;
+  }
+
+  .marketing-trust-card {
+    @apply rounded-2xl border border-white/15 bg-white/[0.07] p-7 shadow-2xl shadow-black/20 backdrop-blur-md sm:p-8;
+  }
+
+  .marketing-trust-kicker {
+    @apply text-xs font-semibold uppercase tracking-wider text-brand-gold;
+  }
+
+  .marketing-trust-list {
+    @apply mt-5 space-y-3 text-sm text-slate-200;
+  }
+
+  .marketing-trust-list li {
+    @apply flex gap-2 before:mt-1.5 before:h-1.5 before:w-1.5 before:shrink-0 before:rounded-full before:bg-brand-gold;
+  }
+
+  .marketing-trust-quote {
+    @apply mt-8 border-t border-white/10 pt-6;
+  }
+
+  .marketing-stats {
+    @apply relative -mt-8 pb-4 md:-mt-10;
+  }
+
+  .marketing-stats-grid {
+    @apply grid gap-4 sm:grid-cols-3 sm:gap-5;
+  }
+
+  .marketing-stat {
+    @apply rounded-2xl border border-slate-200/80 bg-white p-6 text-center shadow-lg shadow-slate-900/5 md:p-7;
+  }
+
+  .marketing-stat-value {
+    @apply text-3xl font-bold tracking-tight text-brand-navy md:text-4xl;
+  }
+
+  .marketing-stat-label {
+    @apply mt-1.5 text-sm font-medium text-slate-600;
+  }
+
+  .marketing-section {
+    @apply py-20 md:py-24;
+  }
+
+  .marketing-section-alt {
+    @apply bg-gradient-to-b from-slate-50 to-white;
+  }
+
+  .marketing-section-head {
+    @apply max-w-2xl;
+  }
+
+  .marketing-section-eyebrow {
+    @apply text-xs font-semibold uppercase tracking-[0.18em] text-brand-navy-mid;
+  }
+
+  .marketing-section-title {
+    @apply mt-3 text-2xl font-bold tracking-tight text-brand-navy md:text-3xl lg:text-[2rem];
+  }
+
+  .marketing-section-desc {
+    @apply mt-4 text-base leading-relaxed text-slate-600;
+  }
+
+  .marketing-services-grid {
+    @apply mt-12 grid gap-6 md:grid-cols-3 md:gap-7;
+  }
+
+  .marketing-service-card {
+    @apply flex flex-col rounded-2xl border border-slate-200/90 bg-white p-7 shadow-md shadow-slate-900/[0.04] transition duration-300 hover:-translate-y-1 hover:border-brand-gold/35 hover:shadow-xl hover:shadow-brand-navy/10;
+  }
+
+  .marketing-service-dot {
+    @apply inline-flex h-14 w-14 items-center justify-center rounded-2xl border-2 text-xl font-bold;
+  }
+
+  .marketing-service-title {
+    @apply mt-5 text-lg font-semibold text-brand-navy;
+  }
+
+  .marketing-service-subtitle {
+    @apply mt-1 text-xs font-semibold uppercase tracking-wide text-brand-navy-mid/80;
+  }
+
+  .marketing-service-desc {
+    @apply mt-3 flex-1 text-sm leading-relaxed text-slate-600;
+  }
+
+  .marketing-service-link {
+    @apply mt-5 inline-flex text-sm font-semibold text-brand-navy-mid transition;
+  }
+
+  .marketing-service-card:hover .marketing-service-link {
+    @apply text-brand-gold;
+  }
+
+  .marketing-benefits-grid {
+    @apply mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3;
+  }
+
+  .marketing-benefit {
+    @apply relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm transition hover:shadow-md;
+  }
+
+  .marketing-benefit-accent {
+    @apply absolute left-0 top-0 h-1 w-full bg-gradient-to-r from-brand-gold via-brand-navy-mid to-transparent;
+  }
+
+  .marketing-cta {
+    @apply relative overflow-hidden py-20 md:py-24;
+  }
+
+  .marketing-cta-bg {
+    @apply pointer-events-none absolute inset-0 bg-gradient-to-r from-brand-navy via-brand-navy-mid to-brand-navy-light;
+  }
+
+  .marketing-cta-inner {
+    @apply relative z-10 text-center;
+  }
+
+  .marketing-cta-title {
+    @apply text-2xl font-bold tracking-tight text-white md:text-3xl;
+  }
+
+  .marketing-cta-desc {
+    @apply mx-auto mt-4 max-w-xl text-base leading-relaxed text-slate-200;
+  }
+
+  .marketing-cta-actions {
+    @apply mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row;
+  }
+
+  .marketing-contact {
+    @apply bg-white pb-24;
+  }
+
+  .marketing-contact-grid {
+    @apply grid gap-12 lg:grid-cols-2 lg:gap-16;
+  }
+
+  .marketing-contact-highlights {
+    @apply mt-8 space-y-4;
+  }
+
+  .marketing-contact-highlight-label {
+    @apply block text-xs font-semibold uppercase tracking-wider text-slate-500;
+  }
+
+  .marketing-contact-highlight-value {
+    @apply mt-0.5 block text-base font-medium text-brand-navy transition hover:text-brand-navy-mid;
+  }
+
+  a.marketing-contact-highlight-value:hover {
+    @apply underline;
+  }
+
+  .marketing-contact-form-wrap {
+    @apply rounded-2xl border border-slate-200 bg-slate-50/80 p-6 shadow-inner shadow-slate-900/5 sm:p-8;
+  }
+
+  .marketing-contact-form-badge {
+    @apply inline-flex rounded-full border border-brand-gold/40 bg-brand-gold/10 px-3 py-1 text-xs font-semibold text-brand-navy-mid;
+  }
+
+  .marketing-contact-field {
+    @apply block;
+  }
+
+  .marketing-contact-label {
+    @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500;
+  }
+
+  .marketing-contact-input {
+    @apply w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-400 shadow-sm;
+  }
+
+  .marketing-contact-textarea {
+    @apply min-h-[100px] resize-none;
+  }
+
+  .marketing-contact-submit {
+    @apply mt-6 w-full cursor-not-allowed rounded-xl bg-slate-300 px-4 py-3 text-sm font-semibold text-slate-500;
+  }
+
+  .marketing-footer {
+    @apply bg-brand-navy text-slate-300;
+  }
+
+  /* Login con marca VR */
+  .auth-screen-branded {
+    @apply min-h-screen bg-gradient-to-br from-brand-navy via-brand-navy-mid to-slate-950 text-slate-100;
+  }
+
+  .auth-brand-panel {
+    @apply hidden min-h-[40vh] flex-col justify-center border-r border-white/10 bg-brand-navy/50 p-8 lg:flex lg:min-h-0 lg:w-[42%] lg:p-10;
+  }
+
+  .auth-form-panel {
+    @apply flex flex-1 flex-col justify-center px-4 py-10 sm:px-8;
   }
 }

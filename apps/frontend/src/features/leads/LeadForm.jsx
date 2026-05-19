@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
+import { apiFetch } from "../../lib/apiClient";
 import { toLocalYmd } from "./dateUi";
 import LeadReferrerPicker from "./LeadReferrerPicker";
 
@@ -40,6 +41,26 @@ export default function LeadForm({
   const [nextActionDate, setNextActionDate] = useState(
     initialValues.nextActionDate ? toLocalYmd(initialValues.nextActionDate) : ""
   );
+  const [serviceCategories, setServiceCategories] = useState([]);
+  const [serviceCategoryId, setServiceCategoryId] = useState(
+    initialValues.serviceCategoryId ?? initialValues.serviceCategory?.id ?? ""
+  );
+
+  useEffect(() => {
+    async function loadCategories() {
+      try {
+        const data = await apiFetch("/api/private/service-categories");
+        const list = data.categories ?? [];
+        setServiceCategories(list);
+        if (mode === "create" && !serviceCategoryId && list.length > 0) {
+          setServiceCategoryId(list[0].id);
+        }
+      } catch {
+        setServiceCategories([]);
+      }
+    }
+    loadCategories();
+  }, [mode]);
 
   useEffect(() => {
     if (mode !== "edit" || !initialValues?.id) return;
@@ -53,6 +74,9 @@ export default function LeadForm({
     setNextActionDate(
       initialValues.nextActionDate ? toLocalYmd(initialValues.nextActionDate) : ""
     );
+    setServiceCategoryId(
+      initialValues.serviceCategoryId ?? initialValues.serviceCategory?.id ?? ""
+    );
   }, [mode, initialValues]);
 
   const isReferral = source === "REFERIDO";
@@ -63,6 +87,7 @@ export default function LeadForm({
       fullName,
       email: email.trim() ? email.trim() : undefined,
       source,
+      serviceCategoryId,
       referredBy: isReferral && referredBy.trim() ? referredBy.trim() : null,
       referredByLeadId: isReferral && selectedReferrer ? selectedReferrer.id : null,
       observations: observations.trim() ? observations.trim() : undefined,
@@ -95,6 +120,23 @@ export default function LeadForm({
           disabled={mode === "edit"}
         />
       </div>
+
+      <label className="form-control">
+        <span className="form-label-surface">Servicio</span>
+        <select
+          className="input-surface h-11"
+          value={serviceCategoryId}
+          onChange={(event) => setServiceCategoryId(event.target.value)}
+          required
+        >
+          <option value="">Selecciona el servicio…</option>
+          {serviceCategories.map((cat) => (
+            <option key={cat.id} value={cat.id}>
+              {cat.name}
+            </option>
+          ))}
+        </select>
+      </label>
 
       <div className="grid gap-4 md:grid-cols-2">
         <Input

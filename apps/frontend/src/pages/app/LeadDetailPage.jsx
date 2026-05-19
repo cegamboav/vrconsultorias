@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
+import ServiceCategoryBadge from "../../components/ui/ServiceCategoryBadge";
 import StatusBadge from "../../components/ui/StatusBadge";
 import { useToast } from "../../components/ui/Toast";
 import { formatActivityDescription } from "../../features/leads/activityDisplay";
@@ -18,6 +19,7 @@ import {
   minFollowUpYmd,
   toLocalYmd
 } from "../../features/leads/dateUi";
+import ReopenLeadModal from "../../features/leads/ReopenLeadModal";
 import { apiFetch } from "../../lib/apiClient";
 import { useAuth } from "../../features/auth/hooks/useAuth";
 
@@ -31,10 +33,10 @@ function formatDate(value) {
 const allowedNextByStatus = {
   NEW: ["CONTACTED"],
   CONTACTED: ["SCHEDULED", "FOLLOW_UP"],
-  SCHEDULED: ["CLOSED_INVESTED", "CLOSED_NOT_INVESTED", "FOLLOW_UP"],
-  FOLLOW_UP: ["CONTACTED", "SCHEDULED", "CLOSED_INVESTED", "CLOSED_NOT_INVESTED"],
-  CLOSED_INVESTED: [],
-  CLOSED_NOT_INVESTED: ["FOLLOW_UP", "CONTACTED", "SCHEDULED"]
+  SCHEDULED: ["CLOSED_SUCCESS", "CLOSED_LOST", "FOLLOW_UP"],
+  FOLLOW_UP: ["CONTACTED", "SCHEDULED", "CLOSED_SUCCESS", "CLOSED_LOST"],
+  CLOSED_SUCCESS: [],
+  CLOSED_LOST: []
 };
 
 export default function LeadDetailPage() {
@@ -67,6 +69,10 @@ export default function LeadDetailPage() {
 
   const [timelineVisible, setTimelineVisible] = useState(TIMELINE_PAGE);
   const [suggestionLoading, setSuggestionLoading] = useState({});
+
+  const [reopenOpen, setReopenOpen] = useState(false);
+  const [reopenError, setReopenError] = useState("");
+  const [isReopening, setIsReopening] = useState(false);
 
   const allowedNext = useMemo(() => {
     const current = lead?.status;
@@ -108,7 +114,7 @@ export default function LeadDetailPage() {
   }, [id]);
 
   useEffect(() => {
-    if (nextStatus === "CLOSED_NOT_INVESTED") {
+    if (nextStatus === "CLOSED_LOST") {
       setCloseReason((prev) => prev || (lead?.noInvestmentReason ?? ""));
     }
   }, [nextStatus, lead?.noInvestmentReason]);
@@ -246,6 +252,31 @@ export default function LeadDetailPage() {
     }
   }
 
+  function closeReopenModal() {
+    if (isReopening) return;
+    setReopenOpen(false);
+    setReopenError("");
+  }
+
+  async function handleReopenSubmit(payload) {
+    setReopenError("");
+    setIsReopening(true);
+    try {
+      await apiFetch(`/api/private/leads/${id}/reopen`, {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+      closeReopenModal();
+      toast.success("Lead reabierto y enviado a Contactado.");
+      navigate("/app/dashboard");
+    } catch (err) {
+      setReopenError(err.message);
+      toast.error(err.message);
+    } finally {
+      setIsReopening(false);
+    }
+  }
+
   async function handleChangeStatus(e) {
     e.preventDefault();
     setStatusError("");
@@ -261,10 +292,10 @@ export default function LeadDetailPage() {
       return;
     }
 
-    if (nextStatus === "CLOSED_NOT_INVESTED") {
+    if (nextStatus === "CLOSED_LOST") {
       const reason = closeReason.trim();
       if (!reason) {
-        setStatusError("Indica el motivo de no inversión.");
+        setStatusError("Indica el motivo de no concretado.");
         return;
       }
     }
@@ -272,7 +303,7 @@ export default function LeadDetailPage() {
     setIsChangingStatus(true);
     try {
       const body = { status: nextStatus };
-      if (nextStatus === "CLOSED_NOT_INVESTED") {
+      if (nextStatus === "CLOSED_LOST") {
         body.noInvestmentReason = closeReason.trim();
       }
 
@@ -318,6 +349,10 @@ export default function LeadDetailPage() {
       ? followUpDueBucket(lead.nextActionDate)
       : null;
 
+  const isClosedSuccess = lead.status === "CLOSED_SUCCESS";
+  const isClosedLost = lead.status === "CLOSED_LOST";
+  const leadDataReadOnly = isClosedSuccess || isClosedLost;
+
   const showFollowUpQuick =
     nextStatus === "FOLLOW_UP" || (lead.status === "FOLLOW_UP" && !nextStatus);
 
@@ -342,6 +377,9 @@ export default function LeadDetailPage() {
             <p className="lead-detail-kicker">Lead #{lead.leadNumber}</p>
             <h2 className="page-title mt-1 max-w-2xl">{lead.fullName}</h2>
             <div className="lead-detail-meta-row">
+              {lead.serviceCategory ? (
+                <ServiceCategoryBadge category={lead.serviceCategory} />
+              ) : null}
               <StatusBadge status={lead.status} />
               {lead.status === "FOLLOW_UP" && lead.followUpReason ? (
                 <span
@@ -366,18 +404,34 @@ export default function LeadDetailPage() {
                   {followBucket === "today" ? " · Hoy" : null}
                 </span>
               ) : null}
+              {leadDataReadOnly ? (
+                <span className="lead-closed-pill">Lead cerrado · Solo lectura</span>
+              ) : null}
             </div>
           </div>
-          <Link to={`/app/leads/${id}/edit`}>
-            <Button variant="ghost-surface" type="button">
-              Editar datos
-            </Button>
-          </Link>
+          {leadDataReadOnly ? null : (
+            <Link to={`/app/leads/${id}/edit`}>
+              <Button variant="ghost-surface" type="button">
+                Editar datos
+              </Button>
+            </Link>
+          )}
         </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="stack-lg lg:col-span-1">
+          {leadDataReadOnly ? (
+            <div className="lead-closed-banner mb-2">
+              <p className="text-sm font-medium text-slate-100">Ficha en solo lectura</p>
+              <p className="mt-1 text-xs text-slate-400">
+                Los datos del contacto no se pueden modificar mientras el lead esté cerrado.
+                {isClosedLost
+                  ? " Usa «Reabrir lead» en Pipeline para volver a darle seguimiento."
+                  : null}
+              </p>
+            </div>
+          ) : null}
           <Card variant="surface" title="Datos" subtitle="Información del lead.">
             <div className="stack-md">
               <div>
@@ -419,10 +473,24 @@ export default function LeadDetailPage() {
                   </p>
                 </div>
               ) : null}
+              {lead.serviceCategory ? (
+                <div>
+                  <p className="page-label">Servicio</p>
+                  <p className="page-value">
+                    <ServiceCategoryBadge category={lead.serviceCategory} />
+                  </p>
+                </div>
+              ) : null}
               {lead.noInvestmentReason ? (
                 <div>
-                  <p className="page-label">Motivo (no inversión)</p>
+                  <p className="page-label">Motivo (no concretado)</p>
                   <p className="page-value">{lead.noInvestmentReason}</p>
+                </div>
+              ) : null}
+              {lead.closedAt ? (
+                <div>
+                  <p className="page-label">Cierre registrado</p>
+                  <p className="page-value">{formatDate(lead.closedAt)}</p>
                 </div>
               ) : null}
               {lead.observations ? (
@@ -478,14 +546,31 @@ export default function LeadDetailPage() {
           </Card>
 
           <Card variant="surface" title="Pipeline" subtitle="Avanza el estado del lead.">
-            {showCloseSuggestion ? (
+            {isClosedSuccess ? (
+              <p className="text-sm text-slate-400">
+                Este lead está cerrado como concretado. No puede reabrirse; si el cliente vuelve,
+                crea un lead nuevo.
+              </p>
+            ) : null}
+            {isClosedLost ? (
+              <div className="stack-md">
+                <p className="text-sm text-slate-400">
+                  Oportunidad cerrada sin concretar. Puedes reabrirla para volver a Contactado e
+                  iniciar de nuevo el proceso comercial.
+                </p>
+                <Button type="button" onClick={() => setReopenOpen(true)} disabled={isReopening}>
+                  Reabrir lead
+                </Button>
+              </div>
+            ) : null}
+            {!isClosedSuccess && !isClosedLost && showCloseSuggestion ? (
               <div className="mb-3 rounded-lg border border-rose-800/50 bg-rose-950/30 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-rose-200">
                   Sugerencia operativa
                 </p>
                 <p className="mt-1 text-sm text-rose-100">
                   Este lead ha estado {followUpCount} veces en seguimiento.
-                  ¿Desea cerrarlo como No invirtió?
+                  ¿Desea cerrarlo como No concretado?
                 </p>
                 <div className="mt-2">
                   <Button
@@ -494,15 +579,16 @@ export default function LeadDetailPage() {
                     className="!h-9 text-xs"
                     onClick={() => {
                       setPendingFollow(null);
-                      setNextStatus("CLOSED_NOT_INVESTED");
+                      setNextStatus("CLOSED_LOST");
                     }}
                   >
-                    Cerrar sin invertir
+                    Cerrar sin concretar
                   </Button>
                 </div>
               </div>
             ) : null}
-            <form className="stack-md" onSubmit={handleChangeStatus}>
+            {!isClosedSuccess && !isClosedLost ? (
+              <form className="stack-md" onSubmit={handleChangeStatus}>
               <label className="form-control">
                 <span className="form-label-surface">Siguiente estado</span>
                 <select
@@ -603,9 +689,9 @@ export default function LeadDetailPage() {
                 </div>
               ) : null}
 
-              {nextStatus === "CLOSED_NOT_INVESTED" ? (
+              {nextStatus === "CLOSED_LOST" ? (
                 <label className="form-control">
-                  <span className="form-label-surface">Motivo de no inversión</span>
+                  <span className="form-label-surface">Motivo de no concretado</span>
                   <textarea
                     className="textarea-surface"
                     value={closeReason}
@@ -639,7 +725,8 @@ export default function LeadDetailPage() {
               {allowedNext.length === 0 ? (
                 <p className="text-app-muted text-xs">No hay más transiciones desde este estado.</p>
               ) : null}
-            </form>
+              </form>
+            ) : null}
           </Card>
         </div>
 
@@ -776,15 +863,15 @@ export default function LeadDetailPage() {
                 return (
                   <article key={activity.id} className="timeline-item">
                     <div className="timeline-meta">
-                      <span>
-                        <span className="timeline-type">
-                          {activityTypeLabel[activity.type] ?? "Actividad"}
-                        </span>
-                        {activity.user?.name ? ` · ${activity.user.name}` : ""}
+                      <span className="timeline-actor">
+                        {activity.user?.name ?? "Sistema"}
                       </span>
                       <span>{formatDate(activity.createdAt)}</span>
                     </div>
                     <p className="timeline-title">{formatActivityDescription(activity)}</p>
+                    <p className="timeline-subtype">
+                      {activityTypeLabel[activity.type] ?? "Actividad"}
+                    </p>
                   </article>
                 );
               })}
@@ -805,6 +892,14 @@ export default function LeadDetailPage() {
           </div>
         </div>
       </div>
+
+      <ReopenLeadModal
+        open={reopenOpen}
+        isSubmitting={isReopening}
+        error={reopenError}
+        onClose={closeReopenModal}
+        onSubmit={handleReopenSubmit}
+      />
     </div>
   );
 }

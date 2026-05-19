@@ -22,12 +22,13 @@ import {
 const allowedTransitions = {
   NEW: ["CONTACTED"],
   CONTACTED: ["SCHEDULED", "FOLLOW_UP"],
-  SCHEDULED: ["CLOSED_INVESTED", "CLOSED_NOT_INVESTED", "FOLLOW_UP"],
+  SCHEDULED: ["CLOSED_SUCCESS", "CLOSED_LOST", "FOLLOW_UP"],
   // El asesor puede cerrar manualmente un lead que está en seguimiento
   // (típicamente después de varios intentos sin respuesta).
-  FOLLOW_UP: ["CONTACTED", "SCHEDULED", "CLOSED_INVESTED", "CLOSED_NOT_INVESTED"],
-  CLOSED_INVESTED: [],
-  CLOSED_NOT_INVESTED: ["FOLLOW_UP", "CONTACTED", "SCHEDULED"]
+  FOLLOW_UP: ["CONTACTED", "SCHEDULED", "CLOSED_SUCCESS", "CLOSED_LOST"],
+  CLOSED_SUCCESS: [],
+  /** Reapertura solo vía POST /leads/:id/reopen (→ CONTACTED). */
+  CLOSED_LOST: []
 };
 
 const legacySourceMap = {
@@ -61,7 +62,28 @@ function validateStatusTransition(currentStatus, nextStatus) {
 }
 
 function isClosedStatus(status) {
-  return status === LeadStatus.CLOSED_INVESTED || status === LeadStatus.CLOSED_NOT_INVESTED;
+  return status === LeadStatus.CLOSED_SUCCESS || status === LeadStatus.CLOSED_LOST;
+}
+
+const SERVICE_CATEGORY_SELECT = {
+  id: true,
+  name: true,
+  slug: true,
+  color: true
+};
+
+async function assertServiceCategoryValid(serviceCategoryId) {
+  if (!serviceCategoryId) {
+    throw new AppError("Selecciona el servicio del lead.", 400);
+  }
+  const cat = await prisma.serviceCategory.findFirst({
+    where: { id: String(serviceCategoryId).trim(), isActive: true },
+    select: { id: true }
+  });
+  if (!cat) {
+    throw new AppError("Servicio no válido.", 400);
+  }
+  return cat.id;
 }
 
 function normalizeFollowUpReason(value) {
@@ -93,8 +115,8 @@ const statusPriority = {
   CONTACTED: 2,
   SCHEDULED: 3,
   FOLLOW_UP: 4,
-  CLOSED_INVESTED: 5,
-  CLOSED_NOT_INVESTED: 6
+  CLOSED_SUCCESS: 5,
+  CLOSED_LOST: 6
 };
 
 function compareLeadsForBandeja(a, b) {
@@ -122,7 +144,8 @@ export async function listLeads() {
       nextActionDate: true,
       lastActivityAt: true,
       createdAt: true,
-      updatedAt: true
+      updatedAt: true,
+      serviceCategory: { select: SERVICE_CATEGORY_SELECT }
     }
   });
 
@@ -160,6 +183,7 @@ export async function createLead({ userId, payload }) {
     phone,
     email,
     source,
+    serviceCategoryId,
     referredBy,
     referredByLeadId,
     observations,
@@ -188,6 +212,8 @@ export async function createLead({ userId, payload }) {
     await assertReferrerLeadValid(refId, null);
   }
 
+  const categoryId = await assertServiceCategoryValid(serviceCategoryId);
+
   const now = new Date();
 
   let parsedNextAction = null;
@@ -205,6 +231,7 @@ export async function createLead({ userId, payload }) {
       phone: trimmedPhone,
       email: email ? String(email).trim().toLowerCase() : null,
       source: normalizeSource(source),
+      serviceCategoryId: categoryId,
       referredBy: referredBy ? String(referredBy).trim() : null,
       referredByLeadId: refId,
       observations: observations ? String(observations).trim() : null,
@@ -234,7 +261,8 @@ export async function createLead({ userId, payload }) {
       status: true,
       nextActionDate: true,
       lastActivityAt: true,
-      createdAt: true
+      createdAt: true,
+      serviceCategory: { select: SERVICE_CATEGORY_SELECT }
     }
   });
 
@@ -245,6 +273,13 @@ export async function updateLead({ leadId, userId, payload }) {
   const lead = await prisma.lead.findUnique({ where: { id: leadId } });
   ensureLeadExists(lead);
 
+  if (isClosedStatus(lead.status)) {
+    throw new AppError(
+      "Este lead está cerrado y la ficha no admite modificaciones hasta reactivarlo por pipeline (si el flujo lo permite).",
+      403
+    );
+  }
+
   const nextRefId =
     payload.referredByLeadId === undefined
       ? lead.referredByLeadId
@@ -253,6 +288,11 @@ export async function updateLead({ leadId, userId, payload }) {
         : String(payload.referredByLeadId).trim();
   if (nextRefId) {
     await assertReferrerLeadValid(nextRefId, leadId);
+  }
+
+  let nextServiceCategoryId = lead.serviceCategoryId;
+  if (payload.serviceCategoryId !== undefined) {
+    nextServiceCategoryId = await assertServiceCategoryValid(payload.serviceCategoryId);
   }
 
   const next = {
@@ -289,7 +329,8 @@ export async function updateLead({ leadId, userId, payload }) {
         throw new AppError("Fecha de próxima acción no válida.", 400);
       }
       return parsed;
-    })()
+    })(),
+    serviceCategoryId: nextServiceCategoryId
   };
 
   if (payload.phone !== undefined && String(payload.phone).trim() !== lead.phone) {
@@ -322,6 +363,9 @@ export async function updateLead({ leadId, userId, payload }) {
   if (next.source !== lead.source) {
     parts.push("Fuente del lead actualizada");
   }
+  if (next.serviceCategoryId !== lead.serviceCategoryId) {
+    parts.push("Servicio del lead actualizado");
+  }
   if (next.referredBy !== lead.referredBy) {
     parts.push("Texto de referido actualizado");
   }
@@ -353,6 +397,7 @@ export async function updateLead({ leadId, userId, payload }) {
         fullName: next.fullName,
         email: next.email,
         source: next.source,
+        serviceCategoryId: next.serviceCategoryId,
         referredBy: next.referredBy,
         referredByLeadId: next.referredByLeadId,
         observations: next.observations,
@@ -372,6 +417,7 @@ export async function updateLead({ leadId, userId, payload }) {
             "fullName",
             "email",
             "source",
+            "serviceCategoryId",
             "referredBy",
             "referredByLeadId",
             "observations",
@@ -390,6 +436,7 @@ export async function getLeadById(id) {
     where: { id },
     include: {
       owner: { select: { id: true, name: true, email: true, role: true } },
+      serviceCategory: { select: SERVICE_CATEGORY_SELECT },
       referredByLead: {
         select: { id: true, leadNumber: true, fullName: true, phone: true }
       },
@@ -425,12 +472,25 @@ export async function changeLeadStatus({ leadId, userId, payload }) {
     return await getLeadById(leadId);
   }
 
+  if (lead.status === LeadStatus.CLOSED_LOST) {
+    throw new AppError(
+      "Este lead no concretado solo puede reabrirse con la acción «Reabrir lead» (→ Contactado).",
+      403
+    );
+  }
+  if (lead.status === LeadStatus.CLOSED_SUCCESS) {
+    throw new AppError(
+      "Un lead concretado no puede cambiar de estado. Crea un lead nuevo si el cliente vuelve.",
+      403
+    );
+  }
+
   validateStatusTransition(lead.status, status);
 
-  if (status === LeadStatus.CLOSED_NOT_INVESTED) {
+  if (status === LeadStatus.CLOSED_LOST) {
     const reason = noInvestmentReason ? String(noInvestmentReason).trim() : "";
     if (!reason) {
-      throw new AppError("Debes indicar el motivo cuando el lead cierra sin inversión.", 400);
+      throw new AppError("Debes indicar el motivo cuando el lead no se concreta.", 400);
     }
   }
 
@@ -471,14 +531,13 @@ export async function changeLeadStatus({ leadId, userId, payload }) {
   let nextClosedAt = lead.closedAt;
   if (isClosedStatus(status)) {
     nextClosedAt = now;
-  } else if (isClosedStatus(lead.status)) {
-    nextClosedAt = null;
   }
+  // Al salir de cerrado (p. ej. reabrir): conservar closedAt para métricas e historial.
 
   let nextNoReason = lead.noInvestmentReason;
-  if (status === LeadStatus.CLOSED_NOT_INVESTED) {
+  if (status === LeadStatus.CLOSED_LOST) {
     nextNoReason = String(noInvestmentReason).trim();
-  } else if (status === LeadStatus.CLOSED_INVESTED) {
+  } else if (status === LeadStatus.CLOSED_SUCCESS) {
     nextNoReason = null;
   }
 
@@ -492,10 +551,7 @@ export async function changeLeadStatus({ leadId, userId, payload }) {
     const human = formatSpanishDayMonthYear(followUpDate);
     const reasonLabel = followUpReasonLabelEs[followUpReasonValue] ?? "Motivo";
     statusDescription =
-      `Lead enviado a seguimiento (#${nextFollowUpCount}) · ${reasonLabel}.\n` +
-      `Próximo contacto programado para el ${human}.`;
-  } else if (lead.status === LeadStatus.FOLLOW_UP) {
-    statusDescription = `Lead reactivado desde seguimiento.\n${statusDescription}`;
+      `${statusDescription}\nMotivo: ${reasonLabel}. Próximo contacto: ${human}.`;
   }
 
   await prisma.$transaction(async (tx) => {
@@ -537,6 +593,68 @@ export async function changeLeadStatus({ leadId, userId, payload }) {
 }
 
 const quickFollowUpDays = new Set([7, 15, 30, 90]);
+
+/**
+ * Reabre un lead CLOSED_LOST → CONTACTED (reinicio comercial simple).
+ * Conserva closedAt, timeline y motivo de no concretado.
+ */
+export async function reopenLostLead({ leadId, userId, payload }) {
+  const lead = await prisma.lead.findUnique({ where: { id: leadId } });
+  ensureLeadExists(lead);
+
+  if (lead.status === LeadStatus.CLOSED_SUCCESS) {
+    throw new AppError(
+      "Un lead concretado no puede reabrirse. Registra un lead nuevo si el cliente vuelve.",
+      400
+    );
+  }
+  if (lead.status !== LeadStatus.CLOSED_LOST) {
+    throw new AppError("Solo se pueden reabrir leads cerrados como no concretados.", 400);
+  }
+
+  const reasonText =
+    payload?.reason !== undefined && payload?.reason !== null
+      ? String(payload.reason).trim()
+      : "";
+
+  const previousClosedAt = lead.closedAt ? lead.closedAt.toISOString() : null;
+  let statusDescription = "Lead reabierto y enviado a Contactado.";
+  if (reasonText) {
+    statusDescription += `\nMotivo: ${reasonText}`;
+  }
+
+  const now = new Date();
+
+  await prisma.$transaction(async (tx) => {
+    await tx.lead.update({
+      where: { id: leadId },
+      data: {
+        status: LeadStatus.CONTACTED,
+        followUpReason: null,
+        nextActionDate: null,
+        lastActivityAt: now
+      }
+    });
+
+    await tx.activity.create({
+      data: {
+        leadId,
+        userId,
+        type: ActivityType.LEAD_REACTIVATED,
+        description: statusDescription,
+        metadata: {
+          action: "LEAD_REOPENED",
+          from: LeadStatus.CLOSED_LOST,
+          to: LeadStatus.CONTACTED,
+          previousClosedAt,
+          ...(reasonText ? { reopenReason: reasonText } : {})
+        }
+      }
+    });
+  });
+
+  return await getLeadById(leadId);
+}
 
 export async function applyFollowUpQuick({
   leadId,

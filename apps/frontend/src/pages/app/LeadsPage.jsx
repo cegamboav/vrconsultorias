@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import Button from "../../components/ui/Button";
+import ServiceCategoryBadge from "../../components/ui/ServiceCategoryBadge";
 import StatusBadge from "../../components/ui/StatusBadge";
 import {
   displayLeadSource,
@@ -13,8 +14,8 @@ const STATUS_PRIORITY = {
   CONTACTED: 2,
   SCHEDULED: 3,
   FOLLOW_UP: 4,
-  CLOSED_INVESTED: 5,
-  CLOSED_NOT_INVESTED: 6
+  CLOSED_SUCCESS: 5,
+  CLOSED_LOST: 6
 };
 
 function compareByKey(a, b, key) {
@@ -23,6 +24,11 @@ function compareByKey(a, b, key) {
       return (a.leadNumber ?? 0) - (b.leadNumber ?? 0);
     case "fullName":
       return (a.fullName ?? "").localeCompare(b.fullName ?? "", "es", { sensitivity: "base" });
+    case "service": {
+      const na = a.serviceCategory?.name ?? "";
+      const nb = b.serviceCategory?.name ?? "";
+      return na.localeCompare(nb, "es", { sensitivity: "base" });
+    }
     case "status": {
       const pa = STATUS_PRIORITY[a.status] ?? 99;
       const pb = STATUS_PRIORITY[b.status] ?? 99;
@@ -134,6 +140,13 @@ export default function LeadsPage() {
                 currentDir={sort.dir}
                 onSort={handleSort}
               />
+              <SortHeader
+                label="Servicio"
+                sortKey="service"
+                currentKey={sort.key}
+                currentDir={sort.dir}
+                onSort={handleSort}
+              />
               <th>Teléfono</th>
               <th>Fuente</th>
               <SortHeader
@@ -170,6 +183,13 @@ export default function LeadsPage() {
                     </Link>
                   </td>
                   <td className="font-medium text-slate-200">{lead.fullName}</td>
+                  <td>
+                    {lead.serviceCategory ? (
+                      <ServiceCategoryBadge category={lead.serviceCategory} />
+                    ) : (
+                      <span className="text-slate-500">—</span>
+                    )}
+                  </td>
                   <td className="text-slate-400">{lead.phone}</td>
                   <td className="text-slate-400">{displayLeadSource(lead.source)}</td>
                   <td>
@@ -208,7 +228,7 @@ export default function LeadsPage() {
             })}
             {orderedLeads.length === 0 && !isLoading ? (
               <tr>
-                <td colSpan={7} className="text-app-muted">
+                <td colSpan={8} className="text-app-muted">
                   No hay leads todavía.
                 </td>
               </tr>

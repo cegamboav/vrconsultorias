@@ -5,9 +5,19 @@ export const leadStatusLabel = {
   CONTACTED: "Contactado",
   SCHEDULED: "Reunión agendada",
   FOLLOW_UP: "Seguimiento",
-  CLOSED_INVESTED: "Cerró · Invirtió",
-  CLOSED_NOT_INVESTED: "Cerró · No invirtió"
+  CLOSED_SUCCESS: "Concretado",
+  CLOSED_LOST: "No concretado"
 };
+
+/** Estados legacy en actividades/metadata anteriores a la migración. */
+export const legacyLeadStatusLabel = {
+  CLOSED_INVESTED: "Concretado",
+  CLOSED_NOT_INVESTED: "No concretado"
+};
+
+export function displayLeadStatus(status) {
+  return leadStatusLabel[status] ?? legacyLeadStatusLabel[status] ?? status;
+}
 
 export const leadSourceLabel = {
   REFERIDO: "Referido",

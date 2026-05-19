@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
+import ServiceCategoryBadge from "../../components/ui/ServiceCategoryBadge";
 import StatusBadge from "../../components/ui/StatusBadge";
 import { formatActivityDescription } from "../../features/leads/activityDisplay";
 import { activityTypeLabel, followUpReasonLabel } from "../../features/leads/labels";
@@ -40,10 +41,13 @@ function MiniLeadLink({ lead, showNextActionDate = true }) {
 
   return (
     <Link to={`/app/leads/${lead.id}`} className="dashboard-lead-card">
-      <div className="dashboard-lead-name">
+      <div className="dashboard-lead-name flex flex-wrap items-center gap-1.5">
         <span className="dashboard-lead-id">#{lead.leadNumber}</span>
         <span className="dashboard-lead-sep">·</span>
         <span className="dashboard-lead-fullname">{lead.fullName}</span>
+        {lead.serviceCategory ? (
+          <ServiceCategoryBadge category={lead.serviceCategory} />
+        ) : null}
       </div>
       {lead.phone ? <div className="dashboard-lead-meta">{lead.phone}</div> : null}
       {reasonText ? (
@@ -224,10 +228,14 @@ export default function DashboardPage() {
             {visibleActivities.map((row) => (
               <div key={row.id} className="dashboard-activity-item">
                 <div className="dashboard-activity-meta">
+                  <span className="dashboard-activity-actor">
+                    {row.user?.name ?? "Sistema"}
+                  </span>
+                  <span className="dashboard-activity-sep"> · </span>
                   <span className="dashboard-activity-type">
                     {activityTypeLabel[row.type] ?? "Actividad"}
                   </span>
-                  {row.user?.name ? ` · ${row.user.name}` : ""} ·{" "}
+                  <span className="dashboard-activity-sep"> · </span>
                   {new Date(row.createdAt).toLocaleString("es-CR", {
                     dateStyle: "short",
                     timeStyle: "short"
