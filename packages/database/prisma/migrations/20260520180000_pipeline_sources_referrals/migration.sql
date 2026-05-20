@@ -48,3 +48,6 @@ ALTER TYPE "LeadSource_new" RENAME TO "LeadSource";
 ALTER TABLE "Lead" ADD COLUMN "referredByLeadId" TEXT;
 
 ALTER TABLE "Lead" ADD CONSTRAINT "Lead_referredByLeadId_fkey" FOREIGN KEY ("referredByLeadId") REFERENCES "Lead"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- Índice sobre la columna recién creada (movido desde la migración huérfana 20260513201722_)
+CREATE INDEX "Lead_referredByLeadId_idx" ON "Lead"("referredByLeadId");
