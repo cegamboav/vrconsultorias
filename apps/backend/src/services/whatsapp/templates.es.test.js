@@ -7,7 +7,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { getTemplate, getTemplateOrThrow, interpolate } from './templates.es.js';
+import { getTemplate, getTemplateOrThrow, getTemplateByKey, interpolate } from './templates.es.js';
 
 // ── getTemplate ──────────────────────────────────────────────────────────────
 
@@ -104,5 +104,73 @@ for (const reason of FOLLOW_UP_REASONS) {
     assert.ok(tpl !== null, `Expected template for FOLLOW_UP:${reason}, got null`);
     assert.ok(typeof tpl.templateKey === 'string' && tpl.templateKey.length > 0);
     assert.ok(typeof tpl.text === 'string' && tpl.text.length > 0);
+    assert.ok(Array.isArray(tpl.variables), 'variables must be an array');
   });
 }
+
+// ── variables field: each template declares the right vars in the right order ─
+
+test('followup_no_response declares [fullName, calendlyUrl] — order matches text', () => {
+  const tpl = getTemplate('FOLLOW_UP', 'NO_RESPONSE');
+  assert.deepEqual(tpl.variables, ['fullName', 'calendlyUrl']);
+  // Sanity: order in `variables` must match left-to-right order in `text`
+  const fullNamePos = tpl.text.indexOf('{{fullName}}');
+  const calendlyPos = tpl.text.indexOf('{{calendlyUrl}}');
+  assert.ok(fullNamePos !== -1 && calendlyPos !== -1);
+  assert.ok(fullNamePos < calendlyPos, '{{fullName}} must come before {{calendlyUrl}} in the text');
+});
+
+test('followup_call_later declares [fullName, calendlyUrl]', () => {
+  assert.deepEqual(getTemplate('FOLLOW_UP', 'CALL_LATER').variables, ['fullName', 'calendlyUrl']);
+});
+
+test('followup_generic declares only [fullName] for all 4 reasons (THINKING/NO_MONEY/BUSY/OTHER)', () => {
+  for (const reason of ['THINKING', 'NO_MONEY', 'BUSY', 'OTHER']) {
+    const tpl = getTemplate('FOLLOW_UP', reason);
+    assert.equal(tpl.templateKey, 'followup_generic');
+    assert.deepEqual(tpl.variables, ['fullName'], `FOLLOW_UP:${reason} variables mismatch`);
+  }
+});
+
+test('manual_intro declares [fullName, ownerName] — order matches text', () => {
+  const tpl = getTemplate('manual_intro');
+  assert.deepEqual(tpl.variables, ['fullName', 'ownerName']);
+  const fullNamePos = tpl.text.indexOf('{{fullName}}');
+  const ownerNamePos = tpl.text.indexOf('{{ownerName}}');
+  assert.ok(fullNamePos < ownerNamePos, '{{fullName}} must come before {{ownerName}}');
+});
+
+// ── getTemplateByKey ─────────────────────────────────────────────────────────
+
+test('getTemplateByKey returns followup_no_response definition', () => {
+  const tpl = getTemplateByKey('followup_no_response');
+  assert.ok(tpl);
+  assert.equal(tpl.templateKey, 'followup_no_response');
+  assert.deepEqual(tpl.variables, ['fullName', 'calendlyUrl']);
+});
+
+test('getTemplateByKey returns followup_generic with 1 variable regardless of which reason mapped to it', () => {
+  const tpl = getTemplateByKey('followup_generic');
+  assert.ok(tpl);
+  assert.equal(tpl.templateKey, 'followup_generic');
+  assert.deepEqual(tpl.variables, ['fullName']);
+});
+
+test('getTemplateByKey returns manual_intro definition', () => {
+  const tpl = getTemplateByKey('manual_intro');
+  assert.ok(tpl);
+  assert.deepEqual(tpl.variables, ['fullName', 'ownerName']);
+});
+
+test('getTemplateByKey returns null for unknown templateKey', () => {
+  assert.equal(getTemplateByKey('does_not_exist'), null);
+});
+
+// ── interpolate: generic placeholder names ───────────────────────────────────
+
+test('interpolate replaces arbitrary placeholder names beyond the original 3', () => {
+  // The refactor made interpolate generic so future templates can introduce new variables
+  const text = 'Saldo: {{amount}} colones para {{customerName}}.';
+  const result = interpolate(text, { amount: '50000', customerName: 'Lucía' });
+  assert.equal(result, 'Saldo: 50000 colones para Lucía.');
+});

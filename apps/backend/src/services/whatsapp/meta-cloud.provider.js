@@ -1,6 +1,7 @@
 import { WhatsAppProvider } from './whatsapp.provider.js';
 import { AppError } from '../../utils/app-error.js';
 import { env } from '../../config/env.js';
+import { getTemplateByKey } from './templates.es.js';
 
 /**
  * MetaCloudWhatsAppProvider — sends template messages via the Meta Cloud API
@@ -54,7 +55,24 @@ export class MetaCloudWhatsAppProvider extends WhatsAppProvider {
   }
 
   async sendTemplate({ to, templateKey, variables, leadId }) {
-    const { fullName = '', ownerName = '', calendlyUrl = '' } = variables ?? {};
+    const template = getTemplateByKey(templateKey);
+    if (!template) {
+      throw new AppError(`Unknown WhatsApp template: ${templateKey}`, 400);
+    }
+
+    const vars = variables ?? {};
+    const parameters = template.variables.map((varName) => ({
+      type: 'text',
+      text: String(vars[varName] ?? ''),
+    }));
+
+    const templatePayload = {
+      name: templateKey,
+      language: { code: 'es' },
+    };
+    if (parameters.length > 0) {
+      templatePayload.components = [{ type: 'body', parameters }];
+    }
 
     let response;
     try {
@@ -68,20 +86,7 @@ export class MetaCloudWhatsAppProvider extends WhatsAppProvider {
           messaging_product: 'whatsapp',
           to: to.replace(/^\+/, ''),
           type: 'template',
-          template: {
-            name: templateKey,
-            language: { code: 'es' },
-            components: [
-              {
-                type: 'body',
-                parameters: [
-                  { type: 'text', text: fullName },
-                  { type: 'text', text: ownerName },
-                  { type: 'text', text: calendlyUrl },
-                ],
-              },
-            ],
-          },
+          template: templatePayload,
         }),
       });
     } catch (networkErr) {

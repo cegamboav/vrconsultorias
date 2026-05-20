@@ -60,7 +60,7 @@ mock.module('../../config/env.js', {
 
 const { MetaCloudWhatsAppProvider } = await import('./meta-cloud.provider.js');
 
-test('MetaCloudWhatsAppProvider.sendTemplate posts to Meta and returns SENT on 200', async (t) => {
+test('MetaCloudWhatsAppProvider.sendTemplate followup_no_response → SENT with 2 params [fullName, calendlyUrl]', async (t) => {
   const fetchMock = t.mock.method(globalThis, 'fetch', () =>
     Promise.resolve({
       ok: true,
@@ -77,7 +77,7 @@ test('MetaCloudWhatsAppProvider.sendTemplate posts to Meta and returns SENT on 2
   const result = await provider.sendTemplate({
     to: '+50688881234',
     templateKey: 'followup_no_response',
-    variables: { fullName: 'Ana', ownerName: 'Pedro', calendlyUrl: 'https://calendly.com/test' },
+    variables: { fullName: 'Ana', ownerName: 'Pedro_IGNORED', calendlyUrl: 'https://calendly.com/test' },
     leadId: 'lead-xyz',
   });
 
@@ -99,12 +99,63 @@ test('MetaCloudWhatsAppProvider.sendTemplate posts to Meta and returns SENT on 2
   assert.equal(body.template.name, 'followup_no_response');
   assert.equal(body.template.language.code, 'es');
   const params = body.template.components[0].parameters;
+  assert.equal(params.length, 2, 'followup_no_response declares 2 variables');
   assert.equal(params[0].text, 'Ana');
-  assert.equal(params[1].text, 'Pedro');
-  assert.equal(params[2].text, 'https://calendly.com/test');
+  assert.equal(params[1].text, 'https://calendly.com/test');
 });
 
-test('MetaCloudWhatsAppProvider.sendTemplate falls back to empty strings for missing variables', async (t) => {
+test('MetaCloudWhatsAppProvider.sendTemplate manual_intro → SENT with 2 params [fullName, ownerName]', async (t) => {
+  let capturedBody;
+  t.mock.method(globalThis, 'fetch', (_url, init) => {
+    capturedBody = JSON.parse(init.body);
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ messages: [{ id: 'wamid.intro' }] }),
+    });
+  });
+
+  const provider = new MetaCloudWhatsAppProvider();
+  const result = await provider.sendTemplate({
+    to: '+50688881234',
+    templateKey: 'manual_intro',
+    variables: { fullName: 'Ana', ownerName: 'Pedro', calendlyUrl: 'https://ignored.example/x' },
+    leadId: 'lead-m',
+  });
+
+  assert.equal(result.status, 'SENT');
+  const params = capturedBody.template.components[0].parameters;
+  assert.equal(params.length, 2, 'manual_intro declares 2 variables');
+  assert.equal(params[0].text, 'Ana');
+  assert.equal(params[1].text, 'Pedro');
+});
+
+test('MetaCloudWhatsAppProvider.sendTemplate followup_generic → SENT with 1 param [fullName]', async (t) => {
+  let capturedBody;
+  t.mock.method(globalThis, 'fetch', (_url, init) => {
+    capturedBody = JSON.parse(init.body);
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ messages: [{ id: 'wamid.gen' }] }),
+    });
+  });
+
+  const provider = new MetaCloudWhatsAppProvider();
+  const result = await provider.sendTemplate({
+    to: '+50688881234',
+    templateKey: 'followup_generic',
+    variables: { fullName: 'Carlos', ownerName: 'IGNORED', calendlyUrl: 'IGNORED' },
+    leadId: 'lead-g',
+  });
+
+  assert.equal(result.status, 'SENT');
+  const params = capturedBody.template.components[0].parameters;
+  assert.equal(params.length, 1, 'followup_generic declares 1 variable');
+  assert.equal(params[0].text, 'Carlos');
+});
+
+test('MetaCloudWhatsAppProvider.sendTemplate missing variables fall back to empty strings', async (t) => {
   let capturedBody;
   t.mock.method(globalThis, 'fetch', (_url, init) => {
     capturedBody = JSON.parse(init.body);
@@ -118,19 +169,19 @@ test('MetaCloudWhatsAppProvider.sendTemplate falls back to empty strings for mis
   const provider = new MetaCloudWhatsAppProvider();
   const result = await provider.sendTemplate({
     to: '+50688881234',
-    templateKey: 'followup_generic',
+    templateKey: 'followup_no_response',
     variables: {},
     leadId: 'lead-1',
   });
 
   assert.equal(result.status, 'SENT');
   const params = capturedBody.template.components[0].parameters;
+  assert.equal(params.length, 2);
   assert.equal(params[0].text, '');
   assert.equal(params[1].text, '');
-  assert.equal(params[2].text, '');
 });
 
-test('MetaCloudWhatsAppProvider.sendTemplate handles undefined variables', async (t) => {
+test('MetaCloudWhatsAppProvider.sendTemplate handles undefined variables argument', async (t) => {
   let capturedBody;
   t.mock.method(globalThis, 'fetch', (_url, init) => {
     capturedBody = JSON.parse(init.body);
@@ -151,9 +202,33 @@ test('MetaCloudWhatsAppProvider.sendTemplate handles undefined variables', async
 
   assert.equal(result.status, 'SENT');
   const params = capturedBody.template.components[0].parameters;
+  assert.equal(params.length, 2);
   assert.equal(params[0].text, '');
   assert.equal(params[1].text, '');
-  assert.equal(params[2].text, '');
+});
+
+test('MetaCloudWhatsAppProvider.sendTemplate throws AppError 400 for unknown templateKey', async (t) => {
+  const fetchMock = t.mock.method(globalThis, 'fetch', () =>
+    Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+  );
+
+  const provider = new MetaCloudWhatsAppProvider();
+  await assert.rejects(
+    () => provider.sendTemplate({
+      to: '+50688881234',
+      templateKey: 'this_template_does_not_exist',
+      variables: {},
+      leadId: 'lead-unk',
+    }),
+    (err) => {
+      assert.match(err.message, /Unknown WhatsApp template/);
+      assert.match(err.message, /this_template_does_not_exist/);
+      assert.equal(err.statusCode, 400);
+      return true;
+    }
+  );
+
+  assert.equal(fetchMock.mock.callCount(), 0, 'fetch should not be called for unknown templates');
 });
 
 test('MetaCloudWhatsAppProvider.sendTemplate throws AppError on Meta 4xx response', async (t) => {

@@ -1,17 +1,35 @@
 /**
  * templates.es.js — Spanish WhatsApp message template catalog.
  *
- * Templates are keyed by (status, followUpReason). Use `getTemplate` to look
- * up a template and `interpolate` to fill in the placeholders.
+ * Each template declares:
+ *   - templateKey: the EXACT name as registered in Meta (lowercase, underscores)
+ *   - text:        body text with named placeholders (used for dry-run preview)
+ *   - variables:   ordered list of variable names that map to Meta's positional
+ *                  {{1}}, {{2}}, … placeholders at send time. The provider uses
+ *                  this list to build the parameters array sent to the API, so
+ *                  the order MUST match the {{N}} sequence used when the
+ *                  template was registered in WhatsApp Manager.
+ *
+ * Lookup helpers:
+ *   - getTemplate(status, reason)   → by (LeadStatus, FollowUpReason)
+ *   - getTemplateByKey(templateKey) → by Meta template name (used by provider)
  */
 
-/** @type {Map<string, { templateKey: string, text: string }>} */
+/**
+ * @typedef {Object} TemplateDef
+ * @property {string}   templateKey  Exact name in Meta.
+ * @property {string}   text         Body text with `{{varName}}` placeholders.
+ * @property {string[]} variables    Variable names in the order they appear as {{1}}, {{2}}, …
+ */
+
+/** @type {Map<string, TemplateDef>} */
 const TEMPLATES = new Map([
   [
     'FOLLOW_UP:NO_RESPONSE',
     {
       templateKey: 'followup_no_response',
       text: 'Hola {{fullName}}, queríamos retomar la conversación y saber si podemos apoyarle en algo. ¿Tiene unos minutos para conversar? Puede agendar aquí: {{calendlyUrl}}',
+      variables: ['fullName', 'calendlyUrl'],
     },
   ],
   [
@@ -19,6 +37,7 @@ const TEMPLATES = new Map([
     {
       templateKey: 'followup_call_later',
       text: 'Hola {{fullName}}, en su momento nos pidió contactarlo más adelante. Queríamos retomar la conversación y ver cómo podemos ayudarle. ¿Le parece bien si hablamos? Puede agendar aquí: {{calendlyUrl}}',
+      variables: ['fullName', 'calendlyUrl'],
     },
   ],
   [
@@ -26,6 +45,7 @@ const TEMPLATES = new Map([
     {
       templateKey: 'followup_generic',
       text: 'Hola {{fullName}}, ¿cómo ha estado? Queríamos saber si le podemos ayudar con algo.',
+      variables: ['fullName'],
     },
   ],
   [
@@ -33,6 +53,7 @@ const TEMPLATES = new Map([
     {
       templateKey: 'followup_generic',
       text: 'Hola {{fullName}}, ¿cómo ha estado? Queríamos saber si le podemos ayudar con algo.',
+      variables: ['fullName'],
     },
   ],
   [
@@ -40,6 +61,7 @@ const TEMPLATES = new Map([
     {
       templateKey: 'followup_generic',
       text: 'Hola {{fullName}}, ¿cómo ha estado? Queríamos saber si le podemos ayudar con algo.',
+      variables: ['fullName'],
     },
   ],
   [
@@ -47,6 +69,7 @@ const TEMPLATES = new Map([
     {
       templateKey: 'followup_generic',
       text: 'Hola {{fullName}}, ¿cómo ha estado? Queríamos saber si le podemos ayudar con algo.',
+      variables: ['fullName'],
     },
   ],
   [
@@ -54,6 +77,7 @@ const TEMPLATES = new Map([
     {
       templateKey: 'manual_intro',
       text: 'Hola {{fullName}}, le escribe {{ownerName}} de VR Consultorías. ¿Tiene un momento para conversar?',
+      variables: ['fullName', 'ownerName'],
     },
   ],
 ]);
@@ -66,7 +90,7 @@ const TEMPLATES = new Map([
  *
  * @param {string} status          - Lead status (e.g. 'FOLLOW_UP') or 'manual_intro'
  * @param {string} [followUpReason] - Follow-up reason (e.g. 'NO_RESPONSE'), optional
- * @returns {{ templateKey: string, text: string }|null}
+ * @returns {TemplateDef|null}
  */
 export function getTemplate(status, followUpReason) {
   if (status === 'manual_intro') {
@@ -81,7 +105,7 @@ export function getTemplate(status, followUpReason) {
  *
  * @param {string} status
  * @param {string} [followUpReason]
- * @returns {{ templateKey: string, text: string }}
+ * @returns {TemplateDef}
  * @throws {Error} if no template matches
  */
 export function getTemplateOrThrow(status, followUpReason) {
@@ -91,18 +115,38 @@ export function getTemplateOrThrow(status, followUpReason) {
 }
 
 /**
- * Replace `{{fullName}}`, `{{ownerName}}`, and `{{calendlyUrl}}` placeholders
- * in a template text string with values from the variables object.
- * Missing variables are replaced with an empty string.
+ * Look up a template by its Meta template key (the `templateKey` field).
+ * Used by the WhatsApp provider to derive the parameter order at send time.
+ *
+ * Several (status, reason) pairs can map to the same templateKey
+ * (e.g. THINKING/NO_MONEY/BUSY/OTHER all → followup_generic). Since all
+ * pairs that share a templateKey share the same text and variables, returning
+ * the first match is unambiguous.
+ *
+ * @param {string} templateKey
+ * @returns {TemplateDef|null}
+ */
+export function getTemplateByKey(templateKey) {
+  for (const tpl of TEMPLATES.values()) {
+    if (tpl.templateKey === templateKey) return tpl;
+  }
+  return null;
+}
+
+/**
+ * Replace `{{name}}` placeholders in a template text with values from the
+ * variables object. Any placeholder whose name is not in `variables` is
+ * replaced with the empty string. Useful for dry-run preview in the noop
+ * provider; the meta provider builds positional parameters from the
+ * template definition instead.
  *
  * @param {string} text
- * @param {{ fullName?: string, ownerName?: string, calendlyUrl?: string }} variables
+ * @param {Record<string, string>} [variables]
  * @returns {string}
  */
 export function interpolate(text, variables) {
-  const { fullName = '', ownerName = '', calendlyUrl = '' } = variables ?? {};
-  return text
-    .replace(/\{\{fullName\}\}/g, fullName)
-    .replace(/\{\{ownerName\}\}/g, ownerName)
-    .replace(/\{\{calendlyUrl\}\}/g, calendlyUrl);
+  const vars = variables ?? {};
+  return text.replace(/\{\{([a-zA-Z][a-zA-Z0-9_]*)\}\}/g, (_, name) =>
+    String(vars[name] ?? '')
+  );
 }
