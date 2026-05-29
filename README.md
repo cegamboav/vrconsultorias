@@ -45,6 +45,8 @@ Variables principales:
 - `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_PORT`
 - `PGADMIN_DEFAULT_EMAIL`, `PGADMIN_DEFAULT_PASSWORD`, `PGADMIN_PORT`
 - `DATABASE_URL` (conexion Prisma)
+- `OPENAI_API_KEY` (asistente interno — fase 1; opcional hasta probar el chat)
+- `OPENAI_MODEL` (opcional, por defecto `gpt-4o-mini`)
 
 ## Levantar entorno completo (instalacion inicial)
 
@@ -139,6 +141,43 @@ Endpoints de leads:
 - `POST /api/private/leads/:id/activities`
 
 Tras cambiar el modelo de estados, aplica migraciones: `npm run prisma:migrate` (incluye script `20260513140000_lead_pipeline_explicit_statuses`).
+
+## Asistente IA interno (fase 1 — backend)
+
+Arquitectura: **interpretación (OpenAI) → validación → servicios existentes (`leads.service` / `activities.service`) → Prisma**. La IA no accede a Prisma ni ejecuta SQL.
+
+Requiere `OPENAI_API_KEY` en `.env` (raíz del monorepo o cwd del backend según cómo arranques la API).
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `GET` | `/api/private/assistant/status` | Estado del asistente (configurado, acciones soportadas) |
+| `POST` | `/api/private/assistant/chat` | Mensaje en lenguaje natural → interpretación + ejecución segura |
+
+Ejemplo de cuerpo:
+
+```json
+{ "message": "Pon a Carlos en seguimiento 15 días" }
+```
+
+Respuesta típica: `interpretation`, `executed`, `result`, `reply`.
+
+Acciones soportadas en esta fase:
+
+- Buscar lead por nombre (`SEARCH_LEAD_BY_NAME`)
+- Cambiar estado (`MOVE_LEAD_STATUS`) — respeta transiciones del pipeline
+- Programar seguimiento (`SCHEDULE_FOLLOW_UP` / sinónimo `MOVE_TO_FOLLOW_UP`) — días 7, 15, 30 o 90
+- Agregar nota (`ADD_NOTE`)
+
+Auditoría: cada chat y cada acción ejecutada se registran en `AuditLog`; las acciones sobre leads dejan huella en el timeline con `metadata.source = "assistant"`.
+
+Prueba rápida (con token JWT):
+
+```bash
+curl -s -X POST http://localhost:4000/api/private/assistant/chat \
+  -H "Authorization: Bearer TU_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"message\":\"Busca leads llamados Carlos\"}"
+```
 
 ## Accesos locales
 

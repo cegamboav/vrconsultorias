@@ -1,5 +1,10 @@
 import dotenv from "dotenv";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// Monorepo root (.env junto a package.json), aunque el cwd sea apps/backend
+dotenv.config({ path: path.resolve(__dirname, "../../../../.env") });
 dotenv.config();
 
 const nodeEnv = process.env.NODE_ENV ?? "development";
@@ -44,10 +49,22 @@ function resolveJwtExpiresIn() {
   return String(raw).trim();
 }
 
+function resolveOpenAiApiKey() {
+  const key = String(process.env.OPENAI_API_KEY ?? "").trim();
+  return key || null;
+}
+
+function resolveOpenAiModel() {
+  const model = String(process.env.OPENAI_MODEL ?? "").trim();
+  return model || "gpt-4o-mini";
+}
+
 export const env = {
   nodeEnv,
   port: Number(process.env.PORT ?? 4000),
   frontendUrl: process.env.FRONTEND_URL ?? "http://localhost:5173",
   jwtSecret: resolveJwtSecret(),
-  jwtExpiresIn: resolveJwtExpiresIn()
+  jwtExpiresIn: resolveJwtExpiresIn(),
+  openaiApiKey: resolveOpenAiApiKey(),
+  openaiModel: resolveOpenAiModel()
 };

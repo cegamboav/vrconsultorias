@@ -172,7 +172,8 @@ export async function searchLeadsForReferrer({ query, excludeLeadId }) {
       id: true,
       leadNumber: true,
       fullName: true,
-      phone: true
+      phone: true,
+      status: true
     }
   });
 }

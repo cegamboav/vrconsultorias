@@ -13,6 +13,7 @@ import privateReportsRouter from "./routes/private/reports.routes.js";
 import privateUsersRouter from "./routes/private/users.routes.js";
 import privateServiceCategoriesRouter from "./routes/private/service-categories.routes.js";
 import privateProfileRouter from "./routes/private/profile.routes.js";
+import privateAssistantRouter from "./assistant/assistant.routes.js";
 
 const app = express();
 
@@ -31,7 +32,13 @@ app.use(morgan("dev"));
 app.get("/", (_req, res) => {
   res.json({
     message: "CRM Referidos API",
-    docs: ["/api/health", "/auth/login", "/auth/me"]
+    docs: [
+      "/api/health",
+      "/auth/login",
+      "/auth/me",
+      "/api/private/assistant/status",
+      "/api/private/assistant/chat"
+    ]
   });
 });
 
@@ -43,6 +50,7 @@ app.use("/api/private/reports", requireAuth, privateReportsRouter);
 app.use("/api/private/users", requireAuth, privateUsersRouter);
 app.use("/api/private/service-categories", requireAuth, privateServiceCategoriesRouter);
 app.use("/api/private/profile", requireAuth, privateProfileRouter);
+app.use("/api/private/assistant", requireAuth, privateAssistantRouter);
 app.get("/api/protected", requireAuth, (req, res) => {
   res.status(200).json({
     message: "Ruta protegida activa.",
