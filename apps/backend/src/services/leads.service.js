@@ -31,6 +31,11 @@ const allowedTransitions = {
   CLOSED_LOST: []
 };
 
+/** Estados destino permitidos desde el estado actual del lead. */
+export function getAllowedNextStatuses(currentStatus) {
+  return [...(allowedTransitions[currentStatus] ?? [])];
+}
+
 const legacySourceMap = {
   REFERRAL: "REFERIDO",
   DIRECT: "DIRECTO",
@@ -175,6 +180,48 @@ export async function searchLeadsForReferrer({ query, excludeLeadId }) {
       phone: true,
       status: true
     }
+  });
+}
+
+export function rankLeadNameMatch(name, query) {
+  const n = String(name ?? "").trim().toLowerCase();
+  const q = String(query ?? "").trim().toLowerCase();
+  if (!n || !q) return 99;
+  if (n === q) return 0;
+  if (n.startsWith(`${q} `) || n.startsWith(q)) return 1;
+  if (n.includes(q)) return 2;
+  return 3;
+}
+
+/** Búsqueda de leads priorizando coincidencia exacta / prefijo del nombre. */
+export async function searchLeadsByNameQuery({ query, excludeLeadId }) {
+  const q = String(query ?? "").trim();
+  if (q.length < 2) {
+    return [];
+  }
+
+  const leads = await prisma.lead.findMany({
+    where: {
+      ...(excludeLeadId ? { id: { not: excludeLeadId } } : {}),
+      OR: [
+        { fullName: { contains: q, mode: "insensitive" } },
+        { phone: { contains: q } }
+      ]
+    },
+    take: 30,
+    select: {
+      id: true,
+      leadNumber: true,
+      fullName: true,
+      phone: true,
+      status: true
+    }
+  });
+
+  return leads.sort((a, b) => {
+    const rankDiff = rankLeadNameMatch(a.fullName, q) - rankLeadNameMatch(b.fullName, q);
+    if (rankDiff !== 0) return rankDiff;
+    return a.leadNumber - b.leadNumber;
   });
 }
 
@@ -744,6 +791,47 @@ export async function applyFollowUpQuick({
   });
 }
 
+/**
+ * Seguimiento comercial vía asistente: si el lead está NEW, primero pasa a CONTACTED
+ * (pipeline válido) y luego aplica el seguimiento.
+ */
+export async function applyCommercialFollowUp({
+  leadId,
+  userId,
+  days,
+  nextActionDate,
+  followUpReason
+}) {
+  const lead = await prisma.lead.findUnique({ where: { id: leadId } });
+  ensureLeadExists(lead);
+
+  if (lead.status === LeadStatus.CLOSED_SUCCESS) {
+    throw new AppError("Un lead concretado no puede pasar a seguimiento.", 400);
+  }
+  if (lead.status === LeadStatus.CLOSED_LOST) {
+    throw new AppError(
+      "Este lead está cerrado como no concretado. Reábreo desde el CRM antes de continuar.",
+      400
+    );
+  }
+
+  if (lead.status === LeadStatus.NEW) {
+    await changeLeadStatus({
+      leadId,
+      userId,
+      payload: { status: LeadStatus.CONTACTED }
+    });
+  }
+
+  return applyFollowUpQuick({
+    leadId,
+    userId,
+    days,
+    nextActionDate,
+    followUpReason
+  });
+}
+
 export async function addLeadActivity({ leadId, userId, payload }) {
   const { type, description, metadata } = payload;
 
@@ -781,4 +869,57 @@ export async function addLeadActivity({ leadId, userId, payload }) {
   });
 
   return activity;
+}
+
+/**
+ * Reprograma cita/reunión: mueve a SCHEDULED si aplica y fija nextActionDate.
+ */
+export async function rescheduleLeadAppointment({ leadId, userId, nextActionDate }) {
+  const dateStart = parseDateInputToStartOfDay(nextActionDate);
+  if (!dateStart) {
+    throw new AppError("La fecha de reprogramación no es válida.", 400);
+  }
+  if (dateStart < startOfLocalDay(new Date())) {
+    throw new AppError("La fecha de reprogramación debe ser hoy o posterior.", 400);
+  }
+
+  const lead = await prisma.lead.findUnique({ where: { id: leadId } });
+  ensureLeadExists(lead);
+
+  if (lead.status === LeadStatus.CLOSED_SUCCESS || lead.status === LeadStatus.CLOSED_LOST) {
+    throw new AppError("No se puede reprogramar un lead cerrado.", 400);
+  }
+
+  if (lead.status !== LeadStatus.SCHEDULED) {
+    await changeLeadStatus({
+      leadId,
+      userId,
+      payload: { status: LeadStatus.SCHEDULED }
+    });
+  }
+
+  const human = formatSpanishDayMonthYear(dateStart);
+  await prisma.$transaction(async (tx) => {
+    await tx.lead.update({
+      where: { id: leadId },
+      data: {
+        nextActionDate: dateStart,
+        lastActivityAt: new Date()
+      }
+    });
+    await tx.activity.create({
+      data: {
+        leadId,
+        userId,
+        type: ActivityType.MEETING_SCHEDULED,
+        description: `Cita reprogramada para ${human}.`,
+        metadata: {
+          nextActionDate: dateStart.toISOString(),
+          source: "assistant"
+        }
+      }
+    });
+  });
+
+  return getLeadById(leadId);
 }

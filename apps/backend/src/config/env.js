@@ -65,6 +65,8 @@ export const env = {
   frontendUrl: process.env.FRONTEND_URL ?? "http://localhost:5173",
   jwtSecret: resolveJwtSecret(),
   jwtExpiresIn: resolveJwtExpiresIn(),
+  assistantEnabled:
+    String(process.env.ASSISTANT_ENABLED ?? "true").toLowerCase() === "true",
   openaiApiKey: resolveOpenAiApiKey(),
   openaiModel: resolveOpenAiModel()
 };

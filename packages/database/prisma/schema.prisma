@@ -36,6 +36,23 @@ model User {
   activities Activity[]
   auditLogs  AuditLog[]
   leads      Lead[]     @relation("LeadOwner")
+  assistantConversationContext AssistantConversationContext?
+}
+
+/// Memoria conversacional del asistente (aclaraciones multi-turno, TTL 15 min).
+model AssistantConversationContext {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pendingAction String
+  leadId        String?
+  leadName      String?
+  metadata      Json?
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([expiresAt])
 }
 
 /// Registro de acciones administrativas y de configuración (sin depender de un lead).

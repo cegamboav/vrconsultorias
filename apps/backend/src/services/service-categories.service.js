@@ -63,6 +63,70 @@ export async function listActiveServiceCategories() {
   });
 }
 
+function normalizeServiceQuery(value) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+/**
+ * Resuelve una categoría activa por nombre o slug (coincidencia exacta o parcial).
+ * @param {string} query
+ * @returns {Promise<{ category: object|null, ambiguous: boolean, candidates: object[], notFound: boolean }>}
+ */
+export async function resolveServiceCategoryByNameOrSlug(query) {
+  const raw = String(query ?? "").trim();
+  if (!raw) {
+    return { category: null, ambiguous: false, candidates: [], notFound: true };
+  }
+
+  const categories = await listActiveServiceCategories();
+  if (categories.length === 0) {
+    return { category: null, ambiguous: false, candidates: [], notFound: true };
+  }
+
+  const normalizedQuery = normalizeServiceQuery(raw);
+  const slugQuery = slugify(raw);
+
+  const exact = categories.filter(
+    (c) =>
+      c.slug === slugQuery ||
+      normalizeServiceQuery(c.slug) === normalizedQuery ||
+      normalizeServiceQuery(c.name) === normalizedQuery
+  );
+
+  if (exact.length === 1) {
+    return { category: exact[0], ambiguous: false, candidates: [], notFound: false };
+  }
+  if (exact.length > 1) {
+    return { category: null, ambiguous: true, candidates: exact, notFound: false };
+  }
+
+  const partial = categories.filter((c) => {
+    const name = normalizeServiceQuery(c.name);
+    const slug = normalizeServiceQuery(c.slug);
+    return name.includes(normalizedQuery) || normalizedQuery.includes(name) || slug.includes(normalizedQuery);
+  });
+
+  if (partial.length === 1) {
+    return { category: partial[0], ambiguous: false, candidates: [], notFound: false };
+  }
+  if (partial.length > 1) {
+    return { category: null, ambiguous: true, candidates: partial, notFound: false };
+  }
+
+  return { category: null, ambiguous: false, candidates: [], notFound: true };
+}
+
+/** Texto con nombres de servicios activos para mensajes de clarificación. */
+export async function formatActiveServiceNamesHint() {
+  const categories = await listActiveServiceCategories();
+  if (categories.length === 0) return null;
+  return categories.map((c) => c.name).join(", ");
+}
+
 /** Listado para Configuración (activas e inactivas). */
 export async function listAllServiceCategories() {
   return prisma.serviceCategory.findMany({

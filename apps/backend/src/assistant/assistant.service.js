@@ -9,8 +9,36 @@ import {
 import {
   EXECUTABLE_ACTIONS,
   executeAssistantAction,
+  isCreateLeadInputComplete,
   normalizeInterpretation
 } from "./assistant.actions.js";
+import {
+  advanceLeadConversation,
+  beginLeadConversation,
+  cancelLeadConversation,
+  formatLeadCreatedConversationReply,
+  hasActiveLeadConversation,
+  isLeadConversationCancelMessage
+} from "../services/assistant-lead-conversation.service.js";
+import {
+  buildSmartStatusDisambiguationReply,
+  buildSmartStatusSuccessReply
+} from "../services/smart-status.service.js";
+import {
+  buildInterpretationFromAssistantContext,
+  inferPersistContextFromClarify,
+  isStandaloneSpanishStatusMessage,
+  NO_PENDING_CONTEXT_REPLY,
+  shouldClearContextAfterAction
+} from "../services/assistant-context-resolver.service.js";
+import { buildAddLeadNoteChoiceReply } from "../services/assistant-lead-note.service.js";
+import { buildResumeLeadDisambiguationReply } from "../services/lead-resume.service.js";
+import { buildSuggestNextActionDisambiguationReply } from "../services/lead-suggest-action.service.js";
+import {
+  clearAssistantContext,
+  getActiveAssistantContext,
+  saveAssistantContext
+} from "../services/assistant-conversation-context.service.js";
 
 async function callOpenAiInterpreter(message) {
   const apiKey = env.openaiApiKey;
@@ -58,6 +86,57 @@ async function callOpenAiInterpreter(message) {
   return normalizeInterpretation(parsed);
 }
 
+function buildConversationChatResponse(turn) {
+  if (turn.executed && turn.result) {
+    return {
+      interpretation: { action: "CREATE_LEAD", viaConversation: true },
+      executed: true,
+      result: turn.result,
+      reply: turn.reply
+    };
+  }
+
+  return {
+    interpretation: {
+      action: "CREATE_LEAD_CONVERSATION",
+      step: turn.step ?? null,
+      collected: turn.collected ?? null,
+      cancelled: turn.cancelled ?? false
+    },
+    executed: false,
+    result: {
+      conversationActive: turn.conversationActive ?? !turn.cancelled,
+      step: turn.step ?? null,
+      collected: turn.collected ?? null,
+      cancelled: turn.cancelled ?? false
+    },
+    reply: turn.reply
+  };
+}
+
+async function logAssistantChatUsage({ userId, userName, interpretation, messagePreview }) {
+  await logAudit({
+    actorId: userId,
+    action: AuditAction.ASSISTANT_CHAT,
+    description: `${userName ?? "Usuario"} usó el asistente.`,
+    metadata: {
+      source: "assistant",
+      interpretation,
+      messagePreview
+    }
+  });
+}
+
+function shouldStartLeadConversation(interpretation) {
+  if (interpretation.action === "CREATE_LEAD_CONVERSATION") {
+    return true;
+  }
+  if (interpretation.action === "CREATE_LEAD" && !isCreateLeadInputComplete(interpretation)) {
+    return true;
+  }
+  return false;
+}
+
 function buildReply({ interpretation, executed, result, errorMessage }) {
   if (errorMessage) {
     return errorMessage;
@@ -73,10 +152,18 @@ function buildReply({ interpretation, executed, result, errorMessage }) {
   }
 
   if (action === "UNKNOWN") {
-    return "No reconocí una acción del CRM en tu mensaje. Puedo buscar leads, cambiar estado, agregar notas o programar seguimiento.";
+    return "No reconocí una acción del CRM en tu mensaje. Puedo consultar leads, resumir el pipeline, listar seguimientos pendientes, buscar, cambiar estado, agregar notas o programar seguimiento.";
   }
 
   if (!executed && result?.needsDisambiguation) {
+    if (result.disambiguationMessage) {
+      return result.disambiguationMessage;
+    }
+    if (action === "SMART_STATUS_UPDATE") {
+      return buildSmartStatusDisambiguationReply(
+        interpretation.leadName ?? result.leadName
+      );
+    }
     const names = (result.candidates ?? [])
       .map((c) => `#${c.leadNumber} ${c.fullName}`)
       .join(", ");
@@ -84,7 +171,7 @@ function buildReply({ interpretation, executed, result, errorMessage }) {
   }
 
   if (!executed) {
-    return "Interpreté tu mensaje pero no ejecuté cambios.";
+    return "Interpreté tu mensaje pero no pude completar la solicitud.";
   }
 
   switch (action) {
@@ -97,14 +184,84 @@ function buildReply({ interpretation, executed, result, errorMessage }) {
       }
       return `Encontré ${n} leads. Revisa la lista en result.leads.`;
     }
+    case "GET_LEAD_STATUS": {
+      const next = result.nextActionDateLabel
+        ? ` Próxima acción: ${result.nextActionDateLabel}.`
+        : "";
+      return `${result.fullName} está en ${result.statusLabel} (${result.service ?? "sin servicio"}).${next}`;
+    }
+    case "GET_LEAD_DETAILS": {
+      const next = result.nextActionDateLabel
+        ? ` Próximo seguimiento: ${result.nextActionDateLabel}.`
+        : "";
+      return `#${result.leadNumber} ${result.fullName} · ${result.statusLabel} · ${result.service ?? "sin servicio"} · ${result.phone}.${next}`;
+    }
+    case "GET_LEAD_TIMELINE_SUMMARY":
+      return result.summaryText ?? "No hay historial disponible para este lead.";
+    case "RESUME_LEAD":
+      return result.summaryText ?? `Resumen de ${result.fullName ?? "el lead"}.`;
+    case "SUGGEST_NEXT_ACTION":
+      return result.summaryText ?? result.recommendation ?? "Recomendación generada.";
+    case "COUNT_LEADS_BY_STATUS":
+      return result.replyText ?? buildCountAllLeadsReply(result);
+    case "LIST_LEADS_BY_STATUS":
+      return result.replyText ?? "Listado de leads completado.";
+    case "GET_PENDING_FOLLOWUPS": {
+      const n = result.count ?? 0;
+      if (n === 0) return "No tienes seguimientos pendientes para hoy.";
+      if (n === 1) {
+        const l = result.leads[0];
+        return `1 seguimiento pendiente: #${l.leadNumber} ${l.fullName} (${l.nextActionDateLabel}).`;
+      }
+      return `${n} seguimientos pendientes para hoy. Revisa result.leads.`;
+    }
+    case "GET_TODAY_AGENDA":
+      return result.summaryText ?? "No tienes acciones pendientes para hoy.";
+    case "GET_ACTIONABLE_LEADS":
+      return result.summaryText ?? "No tienes acciones pendientes de seguimiento para hoy.";
+    case "GET_TOMORROW_AGENDA":
+      return result.summaryText ?? "No tienes acciones programadas para mañana.";
+    case "GET_UPCOMING_FOLLOWUPS":
+      return result.summaryText ?? "No tienes seguimientos programados en ese periodo.";
+    case "GET_PRIORITY_LEADS":
+      return result.summaryText ?? "No tienes leads abiertos para priorizar.";
+    case "GET_OVERVIEW":
+      return result.summaryText ?? "No hay datos de resumen disponibles.";
+    case "GET_OVERDUE_FOLLOWUPS":
+      return result.summaryText ?? "No tienes seguimientos atrasados.";
+    case "GET_OLDEST_UNCONTACTED_LEADS": {
+      const n = result.count ?? 0;
+      if (n === 0) return "No hay leads pendientes de primer contacto.";
+      if (n === 1) {
+        const l = result.leads[0];
+        return `1 lead sin contactar: #${l.leadNumber} ${l.fullName} (desde ${l.createdAtLabel}).`;
+      }
+      return `${n} leads sin contactar (más antiguos primero). Revisa result.leads.`;
+    }
+    case "CREATE_LEAD":
+      return formatLeadCreatedConversationReply(result);
+    case "SMART_STATUS_UPDATE":
+      return buildSmartStatusSuccessReply({
+        fullName: result.fullName ?? result.lead?.fullName ?? "El lead",
+        targetStatus: result.targetStatus,
+        followUpReason: result.followUpReason,
+        days: result.days
+      });
     case "MOVE_LEAD_STATUS":
       return `Estado actualizado para ${result?.lead?.fullName ?? "el lead"}.`;
     case "SCHEDULE_FOLLOW_UP":
       return `Seguimiento programado para ${result?.lead?.fullName ?? "el lead"}.`;
+    case "ADD_LEAD_NOTE":
     case "ADD_NOTE":
-      return `Nota agregada al timeline de ${result?.lead?.fullName ?? "el lead"}.`;
+      return `Nota agregada a ${result?.fullName ?? result?.lead?.fullName ?? "el lead"}.`;
+    case "GET_LEAD_NOTES":
+      return result.summaryText ?? "No hay notas registradas para este lead.";
+    case "GET_ALLOWED_TRANSITIONS":
+      return result.replyText ?? "Consulta de transiciones completada.";
+    case "RESCHEDULE_APPOINTMENT":
+      return `Cita reprogramada para ${result?.lead?.fullName ?? "el lead"}.`;
     default:
-      return "Acción completada.";
+      return "Solicitud completada.";
   }
 }
 
@@ -112,6 +269,13 @@ function buildReply({ interpretation, executed, result, errorMessage }) {
  * @param {{ userId: string, userName?: string, message: string }} input
  */
 export async function processAssistantChat({ userId, userName, message }) {
+  if (!env.assistantEnabled) {
+    throw new AppError(
+      "El asistente IA está deshabilitado para esta instalación.",
+      403
+    );
+  }
+
   const text = String(message ?? "").trim();
   if (!text) {
     throw new AppError("El mensaje no puede estar vacío.", 400);
@@ -120,20 +284,141 @@ export async function processAssistantChat({ userId, userName, message }) {
     throw new AppError("El mensaje es demasiado largo (máximo 2000 caracteres).", 400);
   }
 
+  if (isLeadConversationCancelMessage(text)) {
+    await clearAssistantContext(userId);
+    const cancel = cancelLeadConversation(userId);
+    if (cancel.reply) {
+      await logAssistantChatUsage({
+        userId,
+        userName,
+        interpretation: { action: "CREATE_LEAD_CONVERSATION", cancelled: true },
+        messagePreview: text.slice(0, 200)
+      });
+      return buildConversationChatResponse(cancel);
+    }
+  }
+
+  if (hasActiveLeadConversation(userId)) {
+    const turn = await advanceLeadConversation({ userId, message: text });
+    if (turn) {
+      await logAssistantChatUsage({
+        userId,
+        userName,
+        interpretation: {
+          action: turn.action,
+          step: turn.step ?? null,
+          conversationActive: turn.conversationActive ?? false
+        },
+        messagePreview: text.slice(0, 200)
+      });
+      return buildConversationChatResponse(turn);
+    }
+  }
+
+  const activeContext = await getActiveAssistantContext(userId);
+
+  if (!activeContext) {
+    if (isStandaloneSpanishStatusMessage(text)) {
+      return {
+        interpretation: { action: "CLARIFY", clarification: NO_PENDING_CONTEXT_REPLY },
+        executed: false,
+        result: null,
+        reply: NO_PENDING_CONTEXT_REPLY
+      };
+    }
+  } else {
+    const followUpInterpretation = buildInterpretationFromAssistantContext(activeContext, text);
+    if (
+      !followUpInterpretation &&
+      activeContext.metadata?.pendingDisambiguation &&
+      activeContext.metadata?.candidates?.length
+    ) {
+      const reply =
+        activeContext.pendingAction === "RESUME_LEAD"
+          ? buildResumeLeadDisambiguationReply(activeContext.metadata.candidates)
+          : activeContext.pendingAction === "SUGGEST_NEXT_ACTION"
+            ? buildSuggestNextActionDisambiguationReply(activeContext.metadata.candidates)
+            : buildAddLeadNoteChoiceReply(activeContext.metadata.candidates);
+      return {
+        interpretation: { action: "CLARIFY", clarification: reply, viaContext: true },
+        executed: false,
+        result: null,
+        reply
+      };
+    }
+    if (followUpInterpretation) {
+      await logAssistantChatUsage({
+        userId,
+        userName,
+        interpretation: { ...followUpInterpretation, viaContext: true },
+        messagePreview: text.slice(0, 200)
+      });
+
+      const result = await executeAssistantAction({
+        interpretation: followUpInterpretation,
+        userId,
+        userMessage: text
+      });
+
+      if (result?.needsClarification) {
+        if (result.persistContext) {
+          await saveAssistantContext({ userId, ...result.persistContext });
+        }
+        return {
+          interpretation: {
+            ...followUpInterpretation,
+            action: "CLARIFY",
+            clarification: result.clarification
+          },
+          executed: false,
+          result: null,
+          reply: result.clarification
+        };
+      }
+
+      if (result?.needsDisambiguation && result.persistContext) {
+        await saveAssistantContext({ userId, ...result.persistContext });
+      }
+
+      const executed = !result?.needsDisambiguation;
+      if (executed && shouldClearContextAfterAction(followUpInterpretation.action)) {
+        await clearAssistantContext(userId);
+      }
+
+      return {
+        interpretation: { ...followUpInterpretation, viaContext: true },
+        executed,
+        result,
+        reply: buildReply({
+          interpretation: followUpInterpretation,
+          executed,
+          result
+        })
+      };
+    }
+  }
+
   const interpretation = await callOpenAiInterpreter(text);
 
-  await logAudit({
-    actorId: userId,
-    action: AuditAction.ASSISTANT_CHAT,
-    description: `${userName ?? "Usuario"} usó el asistente.`,
-    metadata: {
-      source: "assistant",
-      interpretation,
-      messagePreview: text.slice(0, 200)
-    }
+  await logAssistantChatUsage({
+    userId,
+    userName,
+    interpretation,
+    messagePreview: text.slice(0, 200)
   });
 
+  if (shouldStartLeadConversation(interpretation)) {
+    const turn = await beginLeadConversation(userId, interpretation);
+    return buildConversationChatResponse(turn);
+  }
+
   if (interpretation.action === "CLARIFY" || interpretation.action === "UNKNOWN") {
+    if (interpretation.action === "CLARIFY") {
+      const persistContext = inferPersistContextFromClarify(interpretation);
+      if (persistContext) {
+        await saveAssistantContext({ userId, ...persistContext });
+      }
+    }
     return {
       interpretation,
       executed: false,
@@ -157,7 +442,41 @@ export async function processAssistantChat({ userId, userName, message }) {
     userMessage: text
   });
 
+  if (result?.needsClarification) {
+    if (result.persistContext) {
+      await saveAssistantContext({ userId, ...result.persistContext });
+    }
+    const clarifyInterpretation = {
+      ...interpretation,
+      action: "CLARIFY",
+      clarification: result.clarification
+    };
+    return {
+      interpretation: clarifyInterpretation,
+      executed: false,
+      result: null,
+      reply: result.clarification
+    };
+  }
+
   const executed = !result?.needsDisambiguation;
+
+  if (result?.persistContext) {
+    await saveAssistantContext({ userId, ...result.persistContext });
+  }
+
+  if (result?.needsDisambiguation) {
+    return {
+      interpretation,
+      executed: false,
+      result,
+      reply: buildReply({ interpretation, executed: false, result })
+    };
+  }
+
+  if (executed && shouldClearContextAfterAction(interpretation.action)) {
+    await clearAssistantContext(userId);
+  }
 
   return {
     interpretation,
@@ -168,13 +487,20 @@ export async function processAssistantChat({ userId, userName, message }) {
 }
 
 export function getAssistantCapabilities() {
+  if (!env.assistantEnabled) {
+    return {
+      enabled: false,
+      configured: false,
+      message: "Asistente deshabilitado."
+    };
+  }
+
   return {
+    enabled: true,
     configured: Boolean(env.openaiApiKey),
     model: env.openaiModel,
-    supportedActions: ASSISTANT_ACTION_TYPES.filter((a) =>
-      ["SEARCH_LEAD_BY_NAME", "MOVE_LEAD_STATUS", "SCHEDULE_FOLLOW_UP", "ADD_NOTE"].includes(
-        a
-      )
+    supportedActions: ASSISTANT_ACTION_TYPES.filter(
+      (a) => !["CLARIFY", "UNKNOWN"].includes(a)
     ),
     architecture: "interpret → validate → existing services → Prisma (via leads.service)"
   };

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import * as assistantController from "./assistant.controller.js";
+import { requireAssistantEnabled } from "./assistant.middleware.js";
 
 const assistantRouter = Router();
 
@@ -15,6 +16,11 @@ const assistantChatRateLimit = rateLimit({
 });
 
 assistantRouter.get("/status", assistantController.status);
-assistantRouter.post("/chat", assistantChatRateLimit, assistantController.chat);
+assistantRouter.post(
+  "/chat",
+  requireAssistantEnabled,
+  assistantChatRateLimit,
+  assistantController.chat
+);
 
 export default assistantRouter;
