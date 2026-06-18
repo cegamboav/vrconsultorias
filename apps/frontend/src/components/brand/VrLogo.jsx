@@ -1,37 +1,42 @@
 import { Link } from "react-router-dom";
+import { VR_LOGO_SRC } from "../../brand/assets.js";
+
+const SIZE_BY_VARIANT = {
+  light: "h-11 w-auto max-w-[11.5rem] sm:max-w-[13rem]",
+  header: "h-[4rem] w-auto max-w-[17rem] sm:h-[4.35rem] sm:max-w-[20rem]",
+  dark: "h-12 w-auto max-w-[13rem]",
+  crm: "h-10 w-auto max-w-[10.5rem] sm:max-w-[11.5rem]"
+};
 
 /**
- * @param {{ variant?: "light" | "dark" | "crm", className?: string, linkTo?: string | null }} props
+ * @param {{ variant?: "light" | "header" | "dark" | "crm", className?: string, linkTo?: string | null }} props
  */
 export default function VrLogo({ variant = "light", className = "", linkTo = "/" }) {
-  const isDark = variant === "dark" || variant === "crm";
-  const titleClass = isDark ? "text-white" : "text-brand-navy";
-  const tagClass = isDark ? "text-brand-gold" : "text-brand-navy-mid";
-  const markClass = variant === "crm" ? "bg-brand-gold text-brand-navy" : "bg-brand-navy-mid text-brand-gold";
+  const sizeClass = SIZE_BY_VARIANT[variant] ?? SIZE_BY_VARIANT.light;
 
-  const inner = (
-    <span className={`inline-flex items-center gap-2.5 ${className}`.trim()}>
-      <span
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${markClass}`}
-        aria-hidden
-      >
-        VR
-      </span>
-      <span className="flex min-w-0 flex-col leading-tight">
-        <span className={`text-base font-semibold tracking-tight ${titleClass}`}>VR Consultorías</span>
-        <span className={`text-[10px] font-medium uppercase tracking-widest ${tagClass}`}>
-          Asesoría financiera
-        </span>
-      </span>
-    </span>
+  const img = (
+    <img
+      src={VR_LOGO_SRC}
+      alt="VR Consultorías — Asesoría financiera"
+      className={`vr-logo object-contain object-left ${sizeClass} ${className}`.trim()}
+      width={208}
+      height={48}
+      loading="eager"
+      decoding="async"
+    />
   );
 
   if (linkTo) {
     return (
-      <Link to={linkTo} className="inline-flex rounded-lg outline-none ring-brand-gold/50 focus-visible:ring-2">
-        {inner}
+      <Link
+        to={linkTo}
+        className="inline-flex shrink-0 rounded-lg outline-none ring-brand-gold/40 focus-visible:ring-2"
+        aria-label="VR Consultorías — Inicio"
+      >
+        {img}
       </Link>
     );
   }
-  return inner;
+
+  return img;
 }

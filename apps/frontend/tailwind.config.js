@@ -22,7 +22,8 @@ export default {
         }
       },
       fontFamily: {
-        display: ['"Segoe UI"', "system-ui", "sans-serif"]
+        sans: ['"Plus Jakarta Sans"', "Inter", "system-ui", "sans-serif"],
+        display: ['"Plus Jakarta Sans"', "Inter", "system-ui", "sans-serif"]
       },
       boxShadow: {
         vr: "0 24px 48px -12px rgba(11, 31, 58, 0.35)"

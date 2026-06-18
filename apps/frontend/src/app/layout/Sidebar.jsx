@@ -29,7 +29,7 @@ export default function Sidebar({ isOpen, onCloseBackdrop }) {
         aria-label="Navegación principal"
       >
         <div className="app-sidebar-header flex flex-col gap-1 px-4 py-4">
-          <VrLogo variant="crm" linkTo="/" className="origin-left scale-[0.92]" />
+          <VrLogo variant="crm" linkTo="/" />
           <p className="text-[10px] font-medium uppercase tracking-wider text-slate-500">
             CRM Referidos
           </p>

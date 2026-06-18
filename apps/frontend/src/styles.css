@@ -3,8 +3,9 @@
 @tailwind utilities;
 
 :root {
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+  font-family: "Plus Jakarta Sans", Inter, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  font-feature-settings: "cv11", "ss01";
 }
 
 @layer base {
@@ -709,7 +710,11 @@
 
   /* —— Marketing / VR Consultorías landing —— */
   .marketing-page {
-    @apply min-h-screen bg-white text-slate-800 antialiased;
+    @apply min-h-screen bg-white font-sans text-slate-800 antialiased;
+  }
+
+  .vr-logo {
+    @apply select-none;
   }
 
   .marketing-container {
@@ -717,15 +722,48 @@
   }
 
   .marketing-header {
-    @apply sticky top-0 z-50 border-b border-slate-200/60 bg-white/90 shadow-sm shadow-slate-900/5 backdrop-blur-lg;
+    @apply sticky top-0 z-50 border-b border-white/10 bg-[#0F172A]/95 shadow-[0_4px_24px_rgba(0,0,0,0.18)] backdrop-blur-xl;
   }
 
   .marketing-nav-link {
-    @apply text-sm font-medium text-slate-600 transition hover:text-brand-navy;
+    @apply relative inline-flex items-center px-1 py-2 text-sm font-medium text-white/90 transition duration-300;
+  }
+
+  .marketing-nav-link::after {
+    content: "";
+    @apply absolute bottom-0 left-0 h-0.5 w-0 rounded-full bg-brand-gold transition-all duration-300 ease-out;
+  }
+
+  .marketing-nav-link:hover {
+    @apply text-white;
+  }
+
+  .marketing-nav-link:hover::after {
+    @apply w-full;
+  }
+
+  .marketing-nav-link:focus-visible {
+    @apply rounded-md text-white outline-none ring-2 ring-brand-gold/50 ring-offset-2 ring-offset-[#0F172A];
+  }
+
+  .marketing-header-private-link {
+    @apply text-xs font-medium text-slate-300 underline-offset-2 transition duration-300 hover:text-brand-gold-light hover:underline;
   }
 
   .marketing-menu-btn {
-    @apply inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200/80 text-brand-navy transition hover:border-slate-300 hover:bg-slate-50;
+    @apply inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/20 text-white transition duration-300 hover:border-brand-gold/45 hover:bg-white/10;
+  }
+
+  .marketing-header-mobile {
+    @apply border-t border-white/10 bg-[#0F172A] px-4 py-4;
+  }
+
+  .marketing-header-mobile-link {
+    @apply rounded-lg px-3 py-2.5 text-sm font-medium text-white/90 transition duration-300 hover:bg-white/10 hover:text-white;
+  }
+
+  .marketing-header-mobile-phone {
+    @apply text-sm text-slate-300 transition duration-300 hover:text-brand-gold-light;
   }
 
   .marketing-private-link {
@@ -733,15 +771,15 @@
   }
 
   .marketing-btn-primary {
-    @apply inline-flex h-12 items-center justify-center rounded-xl bg-brand-navy-mid px-6 text-sm font-semibold text-white shadow-vr transition hover:-translate-y-0.5 hover:bg-brand-primary-hover hover:shadow-lg;
+    @apply inline-flex h-12 items-center justify-center rounded-xl bg-brand-navy-mid px-6 text-sm font-semibold tracking-tight text-white shadow-vr transition duration-200 hover:-translate-y-0.5 hover:bg-brand-primary-hover hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold/50 focus-visible:ring-offset-2;
   }
 
   .marketing-btn-ghost {
-    @apply inline-flex h-12 items-center justify-center rounded-xl border border-white/25 bg-white/5 px-5 text-sm font-medium text-slate-100 backdrop-blur-sm transition hover:bg-white/10;
+    @apply inline-flex h-12 items-center justify-center rounded-xl border border-white/30 bg-white/10 px-5 text-sm font-medium tracking-tight text-slate-100 backdrop-blur-sm transition duration-200 hover:border-white/45 hover:bg-white/15;
   }
 
   .marketing-btn-outline-light {
-    @apply inline-flex h-12 items-center justify-center rounded-xl border border-white/45 px-6 text-sm font-semibold text-white transition hover:bg-white/10;
+    @apply inline-flex h-12 items-center justify-center rounded-xl border border-white/50 px-6 text-sm font-semibold tracking-tight text-white transition duration-200 hover:bg-white/10;
   }
 
   .marketing-hero {
@@ -749,21 +787,21 @@
   }
 
   .marketing-hero-bg {
-    @apply pointer-events-none absolute inset-0 bg-gradient-to-br from-brand-navy via-brand-navy-mid to-[#123d6b];
+    @apply pointer-events-none absolute inset-0 bg-gradient-to-br from-brand-navy via-[#0c3a66] to-brand-navy-mid;
   }
 
   .marketing-hero-bg::before {
     content: "";
-    @apply absolute -right-24 -top-24 h-80 w-80 rounded-full bg-brand-gold/10 blur-3xl;
+    @apply absolute -right-20 -top-20 h-[22rem] w-[22rem] rounded-full bg-brand-gold/10 blur-3xl;
   }
 
   .marketing-hero-bg::after {
     content: "";
-    @apply absolute -bottom-32 -left-16 h-96 w-96 rounded-full bg-white/5 blur-3xl;
+    @apply absolute -bottom-36 -left-20 h-[26rem] w-[26rem] rounded-full bg-sky-400/10 blur-3xl;
   }
 
   .marketing-hero-inner {
-    @apply relative z-10 grid items-center gap-12 lg:grid-cols-[1.1fr_0.9fr] lg:gap-16;
+    @apply relative z-10 grid items-center gap-12 lg:grid-cols-[1.12fr_0.88fr] lg:gap-16;
   }
 
   .marketing-hero-content {
@@ -771,19 +809,19 @@
   }
 
   .marketing-eyebrow {
-    @apply text-xs font-semibold uppercase tracking-[0.2em] text-brand-gold-light;
+    @apply text-xs font-semibold uppercase tracking-[0.22em] text-brand-gold-light;
   }
 
   .marketing-hero-title {
-    @apply mt-4 text-3xl font-bold leading-[1.12] tracking-tight md:text-4xl lg:text-[2.75rem];
+    @apply mt-5 font-display text-3xl font-bold leading-[1.1] tracking-tight md:text-4xl lg:text-[2.85rem];
   }
 
   .marketing-hero-lead {
-    @apply mt-5 max-w-xl text-base leading-relaxed text-slate-200/95 md:text-lg;
+    @apply mt-6 max-w-xl text-base leading-[1.75] text-slate-200/95 md:text-lg;
   }
 
   .marketing-hero-actions {
-    @apply mt-9 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center;
+    @apply mt-10 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center;
   }
 
   .marketing-hero-aside {
@@ -791,7 +829,7 @@
   }
 
   .marketing-trust-card {
-    @apply rounded-2xl border border-white/15 bg-white/[0.07] p-7 shadow-2xl shadow-black/20 backdrop-blur-md sm:p-8;
+    @apply rounded-2xl border border-white/20 bg-gradient-to-br from-white/10 to-white/[0.04] p-7 shadow-2xl shadow-black/25 backdrop-blur-md sm:p-8;
   }
 
   .marketing-trust-kicker {
@@ -819,11 +857,16 @@
   }
 
   .marketing-stat {
-    @apply rounded-2xl border border-slate-200/80 bg-white p-6 text-center shadow-lg shadow-slate-900/5 md:p-7;
+    @apply relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-6 text-center shadow-lg shadow-slate-900/[0.04] md:p-7;
+  }
+
+  .marketing-stat::before {
+    content: "";
+    @apply absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-gold via-brand-navy-mid to-transparent;
   }
 
   .marketing-stat-value {
-    @apply text-3xl font-bold tracking-tight text-brand-navy md:text-4xl;
+    @apply font-display text-3xl font-bold tracking-tight text-brand-navy md:text-4xl;
   }
 
   .marketing-stat-label {
@@ -847,7 +890,7 @@
   }
 
   .marketing-section-title {
-    @apply mt-3 text-2xl font-bold tracking-tight text-brand-navy md:text-3xl lg:text-[2rem];
+    @apply mt-3 font-display text-2xl font-bold tracking-tight text-brand-navy md:text-3xl lg:text-[2rem];
   }
 
   .marketing-section-desc {
@@ -859,11 +902,20 @@
   }
 
   .marketing-service-card {
-    @apply flex flex-col rounded-2xl border border-slate-200/90 bg-white p-7 shadow-md shadow-slate-900/[0.04] transition duration-300 hover:-translate-y-1 hover:border-brand-gold/35 hover:shadow-xl hover:shadow-brand-navy/10;
+    @apply relative flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-7 shadow-md shadow-slate-900/[0.04] transition duration-300 hover:-translate-y-1 hover:border-brand-gold/40 hover:shadow-xl hover:shadow-brand-navy/10;
+  }
+
+  .marketing-service-card::before {
+    content: "";
+    @apply absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-brand-gold/80 via-brand-navy-mid/60 to-transparent opacity-0 transition-opacity duration-300;
+  }
+
+  .marketing-service-card:hover::before {
+    @apply opacity-100;
   }
 
   .marketing-service-dot {
-    @apply inline-flex h-14 w-14 items-center justify-center rounded-2xl border-2 text-xl font-bold;
+    @apply inline-flex h-14 w-14 items-center justify-center rounded-2xl border-2 text-xl font-bold shadow-sm;
   }
 
   .marketing-service-title {
@@ -911,7 +963,7 @@
   }
 
   .marketing-cta-title {
-    @apply text-2xl font-bold tracking-tight text-white md:text-3xl;
+    @apply font-display text-2xl font-bold tracking-tight text-white md:text-3xl;
   }
 
   .marketing-cta-desc {
@@ -975,16 +1027,16 @@
   }
 
   .marketing-footer {
-    @apply bg-brand-navy text-slate-300;
+    @apply border-t border-white/5 bg-gradient-to-b from-brand-navy to-[#071528] text-slate-300;
   }
 
   /* Login con marca VR */
   .auth-screen-branded {
-    @apply min-h-screen bg-gradient-to-br from-brand-navy via-brand-navy-mid to-slate-950 text-slate-100;
+    @apply min-h-screen bg-gradient-to-br from-brand-navy via-[#0c3a66] to-slate-950 text-slate-100;
   }
 
   .auth-brand-panel {
-    @apply hidden min-h-[40vh] flex-col justify-center border-r border-white/10 bg-brand-navy/50 p-8 lg:flex lg:min-h-0 lg:w-[42%] lg:p-10;
+    @apply hidden min-h-[40vh] flex-col justify-center border-r border-white/10 bg-brand-navy/60 p-8 lg:flex lg:min-h-0 lg:w-[42%] lg:p-10 xl:p-12;
   }
 
   .auth-form-panel {
