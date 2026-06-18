@@ -8,11 +8,20 @@ import {
   startOfLocalDay,
   toYmdLocal
 } from "../utils/follow-up-date.js";
-import { PENDING_ACTIONS } from "./assistant-conversation-context.service.js";
+import {
+  PENDING_ACTIONS,
+  getRefinementContextMessage,
+  readAssistantContextMetadata
+} from "./assistant-conversation-context.service.js";
 import {
   buildAddLeadNoteChoiceReply,
   resolveLeadCandidateFromMessage
 } from "./assistant-lead-note.service.js";
+import {
+  resolveSelectedMessageOption,
+  resolveMessageRefinement,
+  normalizeRefinementText
+} from "./lead-contact-message.service.js";
 
 const SPANISH_MONTHS = {
   enero: 0,
@@ -212,6 +221,82 @@ export function buildInterpretationFromAssistantContext(context, message) {
       return null;
     }
 
+    case PENDING_ACTIONS.GENERATE_CONTACT_MESSAGE: {
+      if (context.metadata?.pendingDisambiguation && context.metadata?.candidates) {
+        const candidate = resolveLeadCandidateFromMessage(text, context.metadata.candidates);
+        if (!candidate) return null;
+        const prefs = context.metadata?.messagePreferences ?? {};
+        return {
+          action: "GENERATE_CONTACT_MESSAGE",
+          leadId: candidate.id,
+          leadName: candidate.fullName,
+          style: prefs.style ?? null,
+          isShort: prefs.isShort ?? false,
+          isFormal: prefs.isFormal ?? false
+        };
+      }
+      return null;
+    }
+
+    case PENDING_ACTIONS.GENERATE_MULTIPLE_CONTACT_MESSAGES: {
+      if (context.metadata?.pendingDisambiguation && context.metadata?.candidates) {
+        const candidate = resolveLeadCandidateFromMessage(text, context.metadata.candidates);
+        if (!candidate) return null;
+        return {
+          action: "GENERATE_MULTIPLE_CONTACT_MESSAGES",
+          leadId: candidate.id,
+          leadName: candidate.fullName
+        };
+      }
+      return null;
+    }
+
+    case PENDING_ACTIONS.MULTIPLE_MESSAGE_SELECTION: {
+      const options = context.metadata?.options ?? [];
+      const selected = resolveSelectedMessageOption(text, options);
+      if (!selected) return null;
+
+      return {
+        action: "SELECT_GENERATED_MESSAGE_OPTION",
+        leadId: context.leadId,
+        leadName: context.leadName,
+        selectedIndex: selected.index,
+        selectedStyle: selected.style,
+        message: selected.message
+      };
+    }
+
+    case PENDING_ACTIONS.MESSAGE_REFINEMENT: {
+      const metadata = readAssistantContextMetadata(context);
+      const currentMessage = getRefinementContextMessage(context);
+      if (!currentMessage) return null;
+
+      // TODO: remove — instrumentación temporal REFINE
+      console.log("[REFINE] raw =", text);
+      const normalized = normalizeRefinementText(text);
+      console.log("[REFINE] normalized =", normalized);
+      const refinement = resolveMessageRefinement(text);
+      console.log("[REFINE] refinement =", refinement);
+
+      if (!refinement) {
+        console.log("[REFINE] SHORTER_NOT_DETECTED", {
+          text,
+          normalized,
+          refinement
+        });
+        return null;
+      }
+
+      return {
+        action: "REFINE_SELECTED_MESSAGE",
+        leadId: context.leadId,
+        leadName: context.leadName,
+        refinement,
+        originalStyle: metadata.selectedStyle ?? null,
+        message: currentMessage
+      };
+    }
+
     default:
       return null;
   }
@@ -296,7 +381,8 @@ const WRITE_ACTIONS_THAT_CLEAR_CONTEXT = new Set([
   "RESCHEDULE_APPOINTMENT",
   "SMART_STATUS_UPDATE",
   "RESUME_LEAD",
-  "SUGGEST_NEXT_ACTION"
+  "SUGGEST_NEXT_ACTION",
+  "GENERATE_CONTACT_MESSAGE"
 ]);
 
 export function shouldClearContextAfterAction(action) {

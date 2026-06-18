@@ -44,6 +44,7 @@ function formatAgendaLeadItem(lead) {
   const overdueDays = dayOffset < 0 ? Math.abs(dayOffset) : 0;
 
   return {
+    leadId: lead.id,
     leadNumber: lead.leadNumber,
     fullName: lead.fullName,
     status: lead.status,
@@ -230,6 +231,7 @@ function formatActionableLeadItem(lead) {
   const dayOffset = calendarDaysFromTodayStart(startOfLocalDay(nextActionDate));
 
   return {
+    leadId: lead.id,
     leadNumber: lead.leadNumber,
     fullName: lead.fullName,
     status: lead.status,

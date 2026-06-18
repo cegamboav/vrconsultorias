@@ -134,11 +134,51 @@ describe("Assistant context resolver — CASO 3 ADD_LEAD_NOTE", () => {
   });
 });
 
+describe("Assistant context resolver — MESSAGE_REFINEMENT", () => {
+  const context = {
+    pendingAction: PENDING_ACTIONS.MESSAGE_REFINEMENT,
+    leadId: "lead-keylin",
+    leadName: "Keylin Perez",
+    metadata: {
+      selectedStyle: "DIRECT",
+      message:
+        "Hola Keylin.\n\nQuería confirmar si podemos avanzar con lo conversado sobre charlas financieras.\n\nQuedo atento."
+    }
+  };
+
+  it("Hazla más corta → REFINE_SELECTED_MESSAGE SHORTER", () => {
+    const interpretation = buildInterpretationFromAssistantContext(context, "Hazla más corta.");
+    assert.equal(interpretation.action, "REFINE_SELECTED_MESSAGE");
+    assert.equal(interpretation.refinement, "SHORTER");
+    assert.equal(interpretation.originalStyle, "DIRECT");
+    assert.match(interpretation.message, /Hola Keylin/);
+  });
+
+  it("Quita la despedida → REMOVE_CLOSING", () => {
+    const interpretation = buildInterpretationFromAssistantContext(
+      context,
+      "Quita la despedida."
+    );
+    assert.equal(interpretation.refinement, "REMOVE_CLOSING");
+  });
+
+  it("Dame otra versión → ALTERNATIVE", () => {
+    const interpretation = buildInterpretationFromAssistantContext(
+      context,
+      "Dame otra versión."
+    );
+    assert.equal(interpretation.refinement, "ALTERNATIVE");
+  });
+});
+
 describe("Assistant context resolver — limpieza de contexto", () => {
   it("acciones de escritura limpian contexto al completar", () => {
     assert.equal(shouldClearContextAfterAction("MOVE_LEAD_STATUS"), true);
     assert.equal(shouldClearContextAfterAction("ADD_LEAD_NOTE"), true);
-    assert.equal(shouldClearContextAfterAction("GET_ALLOWED_TRANSITIONS"), false);
+    assert.equal(shouldClearContextAfterAction("GENERATE_CONTACT_MESSAGE"), true);
+    assert.equal(shouldClearContextAfterAction("SELECT_GENERATED_MESSAGE_OPTION"), false);
+    assert.equal(shouldClearContextAfterAction("REFINE_SELECTED_MESSAGE"), false);
+    assert.equal(shouldClearContextAfterAction("GENERATE_MULTIPLE_CONTACT_MESSAGES"), false);
   });
 
   it("Seguimiento pendiente usa SCHEDULE_FOLLOW_UP", () => {

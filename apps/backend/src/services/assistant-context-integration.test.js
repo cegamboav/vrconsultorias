@@ -6,6 +6,10 @@ import {
   inferPersistContextFromClarify
 } from "../services/assistant-context-resolver.service.js";
 import { PENDING_ACTIONS } from "../services/assistant-conversation-context.service.js";
+import {
+  buildMessageRefinementContext,
+  buildMultipleMessageSelectionContext
+} from "../services/assistant-conversation-context.service.js";
 import { getAllowedNextStatuses } from "../services/leads.service.js";
 import { buildAllowedTransitionsReply } from "../services/assistant-context-resolver.service.js";
 
@@ -60,5 +64,44 @@ describe("Integración conversacional — flujo Luis Vargas", () => {
 
     assert.equal(followUp.status, LeadStatus.CONTACTED);
     assert.ok(allowed.includes(followUp.status));
+  });
+});
+
+describe("Integración conversacional — selección y refinamiento de mensaje", () => {
+  const directMessage =
+    "Hola Keylin.\n\nQuería confirmar si podemos avanzar con lo conversado sobre charlas financieras.\n\nQuedo atento.";
+
+  it("turno SELECT persiste MESSAGE_REFINEMENT para el siguiente turno", () => {
+    const selectionContext = buildMultipleMessageSelectionContext({
+      leadId: "lead-keylin",
+      leadName: "Keylin Perez",
+      options: [
+        { style: "FRIENDLY", message: "Mensaje amigable.", label: "Amigable" },
+        { style: "DIRECT", message: directMessage, label: "Directa" },
+        { style: "FORMAL", message: "Mensaje formal.", label: "Formal" }
+      ]
+    });
+
+    const selectInterpretation = buildInterpretationFromAssistantContext(
+      selectionContext,
+      "Me gusta la opción 2."
+    );
+
+    const nextContext = buildMessageRefinementContext({
+      leadId: selectInterpretation.leadId,
+      leadName: selectInterpretation.leadName,
+      selectedStyle: selectInterpretation.selectedStyle,
+      message: selectInterpretation.message
+    });
+
+    assert.equal(nextContext.pendingAction, PENDING_ACTIONS.MESSAGE_REFINEMENT);
+
+    const refineInterpretation = buildInterpretationFromAssistantContext(
+      nextContext,
+      "Quita la despedida."
+    );
+
+    assert.equal(refineInterpretation.action, "REFINE_SELECTED_MESSAGE");
+    assert.equal(refineInterpretation.refinement, "REMOVE_CLOSING");
   });
 });

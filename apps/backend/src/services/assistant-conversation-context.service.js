@@ -9,7 +9,11 @@ export const PENDING_ACTIONS = {
   ADD_NOTE: "ADD_NOTE",
   ADD_LEAD_NOTE: "ADD_LEAD_NOTE",
   RESUME_LEAD: "RESUME_LEAD",
-  SUGGEST_NEXT_ACTION: "SUGGEST_NEXT_ACTION"
+  SUGGEST_NEXT_ACTION: "SUGGEST_NEXT_ACTION",
+  GENERATE_CONTACT_MESSAGE: "GENERATE_CONTACT_MESSAGE",
+  GENERATE_MULTIPLE_CONTACT_MESSAGES: "GENERATE_MULTIPLE_CONTACT_MESSAGES",
+  MULTIPLE_MESSAGE_SELECTION: "MULTIPLE_MESSAGE_SELECTION",
+  MESSAGE_REFINEMENT: "MESSAGE_REFINEMENT"
 };
 
 /**
@@ -30,7 +34,7 @@ function toContextRecord(row) {
   return {
     id: row.id,
     userId: row.userId,
-    pendingAction: row.pendingAction,
+    pendingAction: String(row.pendingAction ?? "").trim(),
     leadId: row.leadId ?? null,
     leadName: row.leadName ?? null,
     metadata: row.metadata ?? null,
@@ -38,6 +42,31 @@ function toContextRecord(row) {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
   };
+}
+
+/**
+ * @param {object|null|undefined} context
+ * @returns {Record<string, unknown>}
+ */
+export function readAssistantContextMetadata(context) {
+  let metadata = context?.metadata;
+  if (typeof metadata === "string") {
+    try {
+      metadata = JSON.parse(metadata);
+    } catch {
+      return {};
+    }
+  }
+  return metadata && typeof metadata === "object" && !Array.isArray(metadata) ? metadata : {};
+}
+
+/**
+ * @param {object|null|undefined} context
+ * @returns {string}
+ */
+export function getRefinementContextMessage(context) {
+  const metadata = readAssistantContextMetadata(context);
+  return String(metadata.message ?? "").trim();
 }
 
 export async function purgeExpiredAssistantContexts() {
@@ -89,14 +118,14 @@ export async function saveAssistantContext({
     where: { userId },
     create: {
       userId,
-      pendingAction,
+      pendingAction: String(pendingAction ?? "").trim(),
       leadId: leadId ?? null,
       leadName: leadName ?? null,
       metadata: metadata ?? null,
       expiresAt
     },
     update: {
-      pendingAction,
+      pendingAction: String(pendingAction ?? "").trim(),
       leadId: leadId ?? null,
       leadName: leadName ?? null,
       metadata: metadata ?? null,
@@ -203,6 +232,77 @@ export function buildSuggestNextActionDisambiguationContext({ leadName, candidat
         leadNumber: c.leadNumber,
         fullName: c.fullName
       }))
+    }
+  };
+}
+
+export function buildGenerateContactMessageDisambiguationContext({
+  leadName,
+  candidates,
+  preferences = null
+}) {
+  return {
+    pendingAction: PENDING_ACTIONS.GENERATE_CONTACT_MESSAGE,
+    leadId: null,
+    leadName: leadName ?? null,
+    metadata: {
+      pendingDisambiguation: true,
+      candidates: (candidates ?? []).slice(0, 10).map((c) => ({
+        id: c.id,
+        leadNumber: c.leadNumber,
+        fullName: c.fullName
+      })),
+      messagePreferences: preferences ?? null
+    }
+  };
+}
+
+export function buildGenerateMultipleContactMessagesDisambiguationContext({ leadName, candidates }) {
+  return {
+    pendingAction: PENDING_ACTIONS.GENERATE_MULTIPLE_CONTACT_MESSAGES,
+    leadId: null,
+    leadName: leadName ?? null,
+    metadata: {
+      pendingDisambiguation: true,
+      candidates: (candidates ?? []).slice(0, 10).map((c) => ({
+        id: c.id,
+        leadNumber: c.leadNumber,
+        fullName: c.fullName
+      }))
+    }
+  };
+}
+
+/**
+ * @param {{ leadId: string, leadName: string, options: Array<{ style: string, message: string, label?: string }> }} params
+ */
+export function buildMultipleMessageSelectionContext({ leadId, leadName, options }) {
+  return {
+    pendingAction: PENDING_ACTIONS.MULTIPLE_MESSAGE_SELECTION,
+    leadId: leadId ?? null,
+    leadName: leadName ?? null,
+    metadata: {
+      options: (options ?? []).map((option, index) => ({
+        index: index + 1,
+        style: option.style,
+        message: option.message,
+        label: option.label ?? option.style
+      }))
+    }
+  };
+}
+
+/**
+ * @param {{ leadId: string, leadName: string, selectedStyle: string, message: string }} params
+ */
+export function buildMessageRefinementContext({ leadId, leadName, selectedStyle, message }) {
+  return {
+    pendingAction: PENDING_ACTIONS.MESSAGE_REFINEMENT,
+    leadId: leadId ?? null,
+    leadName: leadName ?? null,
+    metadata: {
+      selectedStyle: selectedStyle ?? null,
+      message: message ?? ""
     }
   };
 }

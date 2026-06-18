@@ -19,6 +19,10 @@ export const ASSISTANT_ACTION_TYPES = [
   "GET_PRIORITY_LEADS",
   "GET_OVERDUE_FOLLOWUPS",
   "GET_OVERVIEW",
+  "GET_WEEKLY_BUSINESS_SUMMARY",
+  "GET_BUSINESS_INSIGHTS",
+  "GET_BUSINESS_RECOMMENDATIONS",
+  "GET_RECOMMENDED_TASKS",
   "GET_OLDEST_UNCONTACTED_LEADS",
   "CREATE_LEAD",
   "CREATE_LEAD_CONVERSATION",
@@ -26,6 +30,8 @@ export const ASSISTANT_ACTION_TYPES = [
   "GET_LEAD_TIMELINE_SUMMARY",
   "RESUME_LEAD",
   "SUGGEST_NEXT_ACTION",
+  "GENERATE_CONTACT_MESSAGE",
+  "GENERATE_MULTIPLE_CONTACT_MESSAGES",
   "GET_ALLOWED_TRANSITIONS",
   "CLARIFY",
   "UNKNOWN"
@@ -45,10 +51,16 @@ Acciones de CONSULTA (solo leen información, no modifican nada):
 - GET_LEAD_TIMELINE_SUMMARY: resumen narrativo breve del historial (timeline en viñetas). Usar solo si piden explícitamente "historial" o "qué ha pasado" en formato cronológico simple
 - RESUME_LEAD: resumen ejecutivo completo del lead (leadName o leadId). Ej: "Resume a Melissa", "Cuéntame la historia de Melissa", "¿Qué sabes de Melissa?", "Dame un resumen de Melissa", "Muéstrame el contexto de Melissa", "Resumen ejecutivo de Melissa", "¿Qué ha pasado con Melissa?"
 - SUGGEST_NEXT_ACTION: recomendar siguiente paso comercial para un lead (leadName o leadId). NO modifica datos. Ej: "¿Qué me recomiendas hacer con Keylin?", "¿Qué debería hacer con Marielos?", "¿Cuál es el siguiente paso para Luis?", "¿Qué acción recomiendas para Keylin?", "¿Cómo debería dar seguimiento a Marielos?", "¿Qué hago con este lead?"
+- GENERATE_CONTACT_MESSAGE: redactar UN mensaje personalizado de contacto/WhatsApp para un lead (leadName o leadId). NO envía ni modifica datos. Campos opcionales: style (SOFT|DIRECT|FRIENDLY), isShort (true), isFormal (true). Ej: "Genera un mensaje para Keylin", "Genera un mensaje amigable/formal/directo/suave/corto para Keylin", "¿Qué le escribirías a Marielos?", "Redacta un WhatsApp para Luis"
+- GENERATE_MULTIPLE_CONTACT_MESSAGES: generar VARIAS opciones de mensaje (amigable, directa, formal) para un lead (leadName o leadId). NO envía ni modifica datos. Ej: "Genera 3 mensajes para Keylin", "Dame varias opciones para Marielos", "Genera varias versiones", "Dame tres alternativas", "¿Qué opciones tengo para escribirle a Keylin?"
 - GET_ALLOWED_TRANSITIONS: transiciones de estado permitidas para un lead (leadName o leadId). Ej: "¿A qué estado puedo pasar a Luis Vargas?", "¿Qué estados puede tener Luis?", "Opciones de estado para Luis"
 - COUNT_LEADS_BY_STATUS: SOLO contar leads (cuántos). Requiere status o statusScope cuando pregunten por un estado concreto. Ej: "¿Cuántos leads tengo en seguimiento?", "¿Cuántos concretados hay?", "¿Cuántos leads nuevos tengo?", "¿Cuántos leads abiertos hay?"
 - LIST_LEADS_BY_STATUS: listar leads por estado (cuáles / qué leads / muéstrame / lista). Requiere status o statusScope. Ej: "Muéstrame los leads en seguimiento", "¿Qué leads están abiertos?", "¿Qué leads tengo en estado nuevo?", "Lista los leads concretados"
-- GET_OVERVIEW: dashboard conversacional completo del CRM. Ej: "¿Cómo está mi negocio?", "Dame un resumen del CRM", "Resumen general", "¿Cómo vamos?", "Dashboard"
+- GET_OVERVIEW: dashboard conversacional completo del CRM (snapshot actual). Ej: "Dame un resumen del CRM", "Resumen general", "¿Cómo vamos?", "Dashboard"
+- GET_WEEKLY_BUSINESS_SUMMARY: resumen comercial de los últimos 7 días (métricas y actividad). Ej: "¿Qué pasó esta semana?", "Dame un resumen semanal", "¿Qué ocurrió en los últimos 7 días?", "¿Cómo estuvo la semana?"
+- GET_BUSINESS_INSIGHTS: interpretación y patrones del negocio en los últimos 30 días (NO es dashboard ni métricas crudas). Ej: "¿Qué patrones ves?", "¿Qué debería preocuparme?", "¿Por qué estamos perdiendo leads?", "Dame insights del negocio", "Analiza mi CRM", "¿Qué observas?"
+- GET_BUSINESS_RECOMMENDATIONS: acciones comerciales priorizadas para la semana (NO lista de tareas). Ej: "¿Dónde debería enfocarme?", "¿Cuáles son mis prioridades comerciales?", "¿Qué acciones recomiendas?", "¿Cómo puedo mejorar los resultados?"
+- GET_RECOMMENDED_TASKS: plan de trabajo con tareas ejecutables numeradas (NO métricas, NO insights, NO recomendaciones generales). scope TODAY si preguntan por hoy (solo tareas de hoy); scope WEEK si piden plan semanal o prioridades. Ej: "¿Qué tareas tengo esta semana?", "¿Qué debería hacer hoy exactamente?", "Dame mi plan de trabajo", "Organiza mis prioridades", "¿Qué hago hoy?"
 - GET_TODAY_AGENDA: acciones pendientes HOY (todos los leads abiertos con nextActionDate <= fin de hoy). Ej: "Agenda del día", "¿Qué tengo pendiente hoy?" (agenda general)
 - GET_ACTIONABLE_LEADS: seguimientos FOLLOW_UP que requieren acción hoy o vencidos (nextActionDate <= hoy), con motivo. Ej: "¿Qué debo hacer hoy?", "¿Quiénes debo llamar hoy?", "¿Qué tengo pendiente?", "¿Qué seguimientos tengo pendientes?", "¿Qué leads requieren atención?"
 - GET_TOMORROW_AGENDA: acciones programadas para MAÑANA (todos los leads abiertos). Ej: agenda general de mañana
@@ -80,13 +92,22 @@ Sinónimos:
 - "Ver lead X", "detalle de X" → GET_LEAD_DETAILS
 - "Resume a", "resumen de", "resumen ejecutivo", "cuéntame la historia", "qué sabes de", "contexto de", "qué ha pasado con" → RESUME_LEAD (resumen ejecutivo completo)
 - "Qué me recomiendas", "qué debería hacer con", "siguiente paso para", "acción recomiendas", "cómo debería dar seguimiento", "qué hago con" + nombre → SUGGEST_NEXT_ACTION (solo recomienda, NO ejecuta)
+- "Genera un mensaje", "redacta un whatsapp", "qué le escribirías", "qué le digo", "qué mensaje me recomiendas enviar", "mensaje de seguimiento", "cómo contacto a" + nombre (UN mensaje) → GENERATE_CONTACT_MESSAGE
+- "Genera 3 mensajes", "varias opciones", "varias versiones", "tres alternativas", "qué opciones tengo para escribirle" + nombre → GENERATE_MULTIPLE_CONTACT_MESSAGES (3 variantes: amigable, directa, formal)
+- "amigable/amistoso/friendly" → style=FRIENDLY; "formal/profesional" → isFormal=true; "directo/concreto" → style=DIRECT; "suave/soft" → style=SOFT; "corto/breve" → isShort=true
 - "Resume", "historia de" (solo cronología) → preferir RESUME_LEAD salvo que pidan solo timeline corto
-- "Resumen general", "cómo está mi negocio", "dashboard", "cómo vamos" → GET_OVERVIEW
+- "Resumen general", "dashboard", "cómo vamos", "cómo está mi negocio" (snapshot actual) → GET_OVERVIEW
+- "Esta semana", "resumen semanal", "últimos 7 días", "qué pasó esta semana", "cómo estuvo la semana" → GET_WEEKLY_BUSINESS_SUMMARY
+- "Patrones", "insights", "qué debería preocuparme", "analiza mi crm", "qué observas", "por qué estamos perdiendo", "qué está pasando en el negocio" → GET_BUSINESS_INSIGHTS
+- "Qué debería hacer esta semana", "dónde debería enfocarme" (recomendaciones estratégicas), "prioridades comerciales", "qué acciones recomiendas", "cómo puedo mejorar los resultados" → GET_BUSINESS_RECOMMENDATIONS
+- "Plan de trabajo", "organiza mis prioridades", "qué tareas tengo esta semana" → GET_RECOMMENDED_TASKS (scope WEEK)
+- "hoy exactamente", "qué hago hoy", "qué debo hacer hoy" (lista numerada de tareas), "en qué debería enfocarme hoy" → GET_RECOMMENDED_TASKS (scope TODAY)
+- "Qué me recomiendas hacer con [nombre]" → SUGGEST_NEXT_ACTION (lead específico)
 - "Cuántos leads", "cuántos hay en", "cuántos tengo en" → COUNT_LEADS_BY_STATUS (NUNCA LIST)
 - "Qué leads", "cuáles leads", "muéstrame los leads", "lista", "listar" + estado → LIST_LEADS_BY_STATUS (NUNCA COUNT)
 - "Leads abiertos", "abiertos", "en curso" → statusScope=OPEN
 - "Agenda del día", "pendiente hoy" (agenda general) → GET_TODAY_AGENDA
-- "Qué debo hacer hoy", "quiénes debo llamar hoy", "seguimientos pendientes", "qué tengo pendiente" (seguimientos hoy/vencidos) → GET_ACTIONABLE_LEADS
+- "Qué debo hacer hoy", "quiénes debo llamar hoy" (lista seguimientos con motivo) → GET_ACTIONABLE_LEADS; para plan de tareas numerado usar GET_RECOMMENDED_TASKS
 - "A quién debería llamar primero", "prioriza mis leads", "leads más importantes", "atender primero", "probabilidad de cerrar", "requieren más atención" (ranking) → GET_PRIORITY_LEADS
 - "Mañana" + seguimientos / "vencen esta semana" / "próximos 7 días" / "programado esta semana" → GET_UPCOMING_FOLLOWUPS
 - "Mañana" (agenda general, cualquier estado) → GET_TOMORROW_AGENDA
@@ -142,6 +163,32 @@ Ejemplo RESUME_LEAD:
 Ejemplo SUGGEST_NEXT_ACTION:
 {
   "action": "SUGGEST_NEXT_ACTION",
+  "leadName": "Keylin Perez",
+  "leadId": null
+}
+
+Ejemplo GENERATE_CONTACT_MESSAGE:
+{
+  "action": "GENERATE_CONTACT_MESSAGE",
+  "leadName": "Keylin Perez",
+  "leadId": null,
+  "style": null,
+  "isShort": false,
+  "isFormal": false
+}
+
+Ejemplo GENERATE_CONTACT_MESSAGE amigable y corto:
+{
+  "action": "GENERATE_CONTACT_MESSAGE",
+  "leadName": "Keylin Perez",
+  "style": "FRIENDLY",
+  "isShort": true,
+  "isFormal": false
+}
+
+Ejemplo GENERATE_MULTIPLE_CONTACT_MESSAGES:
+{
+  "action": "GENERATE_MULTIPLE_CONTACT_MESSAGES",
   "leadName": "Keylin Perez",
   "leadId": null
 }
@@ -221,7 +268,8 @@ Reglas:
 - No propongas estados, acciones ni motivos fuera de las listas
 - Si hay ambigüedad (varios leads posibles sin id), usa CLARIFY
 - Si la intención es solo consultar, elige una acción GET_* y NO uses acciones de escritura
-- Diferencia estricta: "qué debo hacer hoy" / "a quién llamar hoy" → GET_ACTIONABLE_LEADS; "a quién llamar primero" / "prioriza" → GET_PRIORITY_LEADS
+- Diferencia estricta: GET_RECOMMENDED_TASKS = lista de tareas; GET_BUSINESS_RECOMMENDATIONS = recomendaciones estratégicas; GET_ACTIONABLE_LEADS = seguimientos hoy/vencidos con detalle
+- Diferencia estricta: SUGGEST_NEXT_ACTION = qué hacer tú como vendedor; GENERATE_CONTACT_MESSAGE = un texto listo para enviar; GENERATE_MULTIPLE_CONTACT_MESSAGES = tres alternativas (amigable, directa, formal)
 - Diferencia estricta: "qué tengo mañana" sobre seguimientos → GET_UPCOMING_FOLLOWUPS; agenda general mañana → GET_TOMORROW_AGENDA
 - GET_UPCOMING_FOLLOWUPS admite daysAhead (default 7) para "próximos N días"`;
 }

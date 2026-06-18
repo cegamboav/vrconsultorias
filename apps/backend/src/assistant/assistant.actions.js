@@ -34,6 +34,25 @@ import {
 import { getLeadTimelineSummaryByLeadId } from "../services/lead-timeline.service.js";
 import { getOverdueFollowups, getTodayAgenda, getTomorrowAgenda, getActionableLeads, getUpcomingFollowups, resolveUpcomingFollowupsRange } from "../services/lead-agenda.service.js";
 import { getPriorityLeads } from "../services/lead-priority.service.js";
+import { getWeeklyBusinessSummary } from "../services/lead-weekly-summary.service.js";
+import { getBusinessInsights } from "../services/lead-business-insights.service.js";
+import { getBusinessRecommendations } from "../services/lead-business-recommendations.service.js";
+import { getRecommendedTasks } from "../services/lead-recommended-tasks.service.js";
+import {
+  buildGenerateContactMessageDisambiguationReply,
+  buildGenerateMultipleContactMessagesDisambiguationReply,
+  formatSelectedMessageOptionText,
+  formatRefinedMessageText,
+  refineSelectedMessage,
+  NO_SELECTED_MESSAGE_REPLY,
+  buildMessageRefinementClarificationReply,
+  resolveMessageRefinement,
+  normalizeRefinementText,
+  getContactMessageByLeadId,
+  getMessageOptionStyleLabel,
+  getMultipleContactMessagesByLeadId,
+  resolveContactMessagePreferences
+} from "../services/lead-contact-message.service.js";
 import {
   buildSuggestNextActionDisambiguationReply,
   getSuggestedNextActionByLeadId
@@ -87,7 +106,11 @@ import {
   buildRescheduleContext,
   buildResumeLeadDisambiguationContext,
   buildScheduleFollowUpContext,
-  buildSuggestNextActionDisambiguationContext
+  buildSuggestNextActionDisambiguationContext,
+  buildGenerateContactMessageDisambiguationContext,
+  buildGenerateMultipleContactMessagesDisambiguationContext,
+  buildMultipleMessageSelectionContext,
+  buildMessageRefinementContext
 } from "../services/assistant-conversation-context.service.js";
 import { toYmdLocal } from "../utils/follow-up-date.js";
 
@@ -109,12 +132,20 @@ export const EXECUTABLE_ACTIONS = new Set([
   "GET_PRIORITY_LEADS",
   "GET_OVERDUE_FOLLOWUPS",
   "GET_OVERVIEW",
+  "GET_WEEKLY_BUSINESS_SUMMARY",
+  "GET_BUSINESS_INSIGHTS",
+  "GET_BUSINESS_RECOMMENDATIONS",
+  "GET_RECOMMENDED_TASKS",
   "GET_OLDEST_UNCONTACTED_LEADS",
   "CREATE_LEAD",
   "SMART_STATUS_UPDATE",
   "GET_LEAD_TIMELINE_SUMMARY",
   "RESUME_LEAD",
   "SUGGEST_NEXT_ACTION",
+  "GENERATE_CONTACT_MESSAGE",
+  "GENERATE_MULTIPLE_CONTACT_MESSAGES",
+  "SELECT_GENERATED_MESSAGE_OPTION",
+  "REFINE_SELECTED_MESSAGE",
   "GET_ALLOWED_TRANSITIONS",
   "RESCHEDULE_APPOINTMENT"
 ]);
@@ -760,6 +791,250 @@ async function executeSuggestNextAction({ interpretation, userId }) {
 }
 
 /**
+ * @param {{ interpretation: object, userId: string, userMessage?: string }} ctx
+ */
+async function executeGenerateContactMessage({ interpretation, userId, userMessage = "" }) {
+  const action = "GENERATE_CONTACT_MESSAGE";
+  const leadName = String(interpretation.leadName ?? "").trim();
+  const preferences = resolveContactMessagePreferences(userMessage, interpretation);
+
+  if (!leadName && !interpretation.leadId) {
+    return buildClarifyResult("Indica el nombre del lead para generar el mensaje.");
+  }
+
+  let leadResult;
+  try {
+    leadResult = await resolveLeadTarget({
+      leadId: interpretation.leadId,
+      leadName: leadName || interpretation.leadName
+    });
+  } catch (error) {
+    if (error instanceof AppError && error.statusCode === 404) {
+      return buildClarifyResult(buildLeadNotFoundReply(leadName || interpretation.leadName));
+    }
+    if (error instanceof AppError) {
+      return buildClarifyResult(error.message);
+    }
+    throw error;
+  }
+
+  const { lead, ambiguous, candidates } = leadResult;
+  if (ambiguous) {
+    return {
+      action,
+      executed: false,
+      needsDisambiguation: true,
+      candidates,
+      disambiguationMessage: buildGenerateContactMessageDisambiguationReply(candidates),
+      persistContext: buildGenerateContactMessageDisambiguationContext({
+        leadName: leadName || interpretation.leadName,
+        candidates,
+        preferences
+      })
+    };
+  }
+
+  const contactMessage = await getContactMessageByLeadId(lead.id, preferences);
+
+  await recordAssistantAudit({
+    actorId: userId,
+    action,
+    description: `Mensaje de contacto vía asistente (${lead.leadNumber} · ${lead.fullName}).`,
+    metadata: {
+      leadId: lead.id,
+      messageType: contactMessage.messageType,
+      status: contactMessage.status,
+      style: contactMessage.style,
+      isShort: contactMessage.isShort,
+      isFormal: contactMessage.isFormal
+    }
+  });
+
+  return contactMessage;
+}
+
+/**
+ * @param {{ interpretation: object, userId: string }} ctx
+ */
+async function executeGenerateMultipleContactMessages({ interpretation, userId }) {
+  const action = "GENERATE_MULTIPLE_CONTACT_MESSAGES";
+  const leadName = String(interpretation.leadName ?? "").trim();
+
+  if (!leadName && !interpretation.leadId) {
+    return buildClarifyResult("Indica el nombre del lead para generar las opciones de mensaje.");
+  }
+
+  let leadResult;
+  try {
+    leadResult = await resolveLeadTarget({
+      leadId: interpretation.leadId,
+      leadName: leadName || interpretation.leadName
+    });
+  } catch (error) {
+    if (error instanceof AppError && error.statusCode === 404) {
+      return buildClarifyResult(buildLeadNotFoundReply(leadName || interpretation.leadName));
+    }
+    if (error instanceof AppError) {
+      return buildClarifyResult(error.message);
+    }
+    throw error;
+  }
+
+  const { lead, ambiguous, candidates } = leadResult;
+  if (ambiguous) {
+    return {
+      action,
+      executed: false,
+      needsDisambiguation: true,
+      candidates,
+      disambiguationMessage: buildGenerateMultipleContactMessagesDisambiguationReply(candidates),
+      persistContext: buildGenerateMultipleContactMessagesDisambiguationContext({
+        leadName: leadName || interpretation.leadName,
+        candidates
+      })
+    };
+  }
+
+  const contactMessages = await getMultipleContactMessagesByLeadId(lead.id);
+
+  await recordAssistantAudit({
+    actorId: userId,
+    action,
+    description: `Opciones de mensaje vía asistente (${lead.leadNumber} · ${lead.fullName}).`,
+    metadata: {
+      leadId: lead.id,
+      messageType: contactMessages.messageType,
+      status: contactMessages.status,
+      optionCount: contactMessages.options?.length ?? 0
+    }
+  });
+
+  return {
+    ...contactMessages,
+    persistContext: buildMultipleMessageSelectionContext({
+      leadId: lead.id,
+      leadName: lead.fullName,
+      options: (contactMessages.options ?? []).map((option) => ({
+        style: option.style,
+        message: option.message,
+        label: getMessageOptionStyleLabel(option.style)
+      }))
+    })
+  };
+}
+
+/**
+ * @param {{ interpretation: object, userId: string }} ctx
+ */
+async function executeSelectGeneratedMessageOption({ interpretation, userId }) {
+  const action = "SELECT_GENERATED_MESSAGE_OPTION";
+
+  if (!interpretation.message || interpretation.selectedIndex == null) {
+    return buildClarifyResult("Indica cuál opción prefieres: 1, 2 o 3.");
+  }
+
+  const result = {
+    action,
+    leadId: interpretation.leadId ?? null,
+    fullName: interpretation.leadName ?? null,
+    selectedIndex: interpretation.selectedIndex,
+    selectedStyle: interpretation.selectedStyle,
+    message: interpretation.message
+  };
+
+  result.summaryText = formatSelectedMessageOptionText(result);
+
+  await recordAssistantAudit({
+    actorId: userId,
+    action,
+    description: `Selección de mensaje vía asistente (${interpretation.leadName ?? "lead"} · opción ${interpretation.selectedIndex}).`,
+    metadata: {
+      leadId: interpretation.leadId ?? null,
+      selectedIndex: interpretation.selectedIndex,
+      selectedStyle: interpretation.selectedStyle
+    }
+  });
+
+  return {
+    ...result,
+    persistContext: buildMessageRefinementContext({
+      leadId: interpretation.leadId,
+      leadName: interpretation.leadName,
+      selectedStyle: interpretation.selectedStyle,
+      message: interpretation.message
+    })
+  };
+}
+
+/**
+ * @param {{ interpretation: object, userId: string, userMessage?: string }} ctx
+ */
+async function executeRefineSelectedMessage({ interpretation, userId, userMessage = "" }) {
+  const action = "REFINE_SELECTED_MESSAGE";
+  const message = String(interpretation.message ?? "").trim();
+
+  if (!message) {
+    return buildClarifyResult(NO_SELECTED_MESSAGE_REPLY);
+  }
+
+  let refinement = interpretation.refinement ?? resolveMessageRefinement(userMessage);
+
+  // TODO: remove — logs temporales de depuración REFINE
+  console.log("[REFINE] message =", userMessage);
+  console.log("[REFINE] normalized =", normalizeRefinementText(userMessage));
+  console.log("[REFINE] refinement =", refinement);
+
+  if (!refinement) {
+    return {
+      ...buildClarifyResult(buildMessageRefinementClarificationReply()),
+      persistContext: buildMessageRefinementContext({
+        leadId: interpretation.leadId,
+        leadName: interpretation.leadName,
+        selectedStyle: interpretation.originalStyle ?? interpretation.selectedStyle,
+        message
+      })
+    };
+  }
+
+  const refinedMessage = refineSelectedMessage({
+    message,
+    refinement,
+    leadName: interpretation.leadName
+  });
+
+  const result = {
+    action,
+    leadId: interpretation.leadId ?? null,
+    fullName: interpretation.leadName ?? null,
+    refinement,
+    originalStyle: interpretation.originalStyle ?? interpretation.selectedStyle ?? null,
+    message: refinedMessage,
+    summaryText: formatRefinedMessageText({ message: refinedMessage })
+  };
+
+  await recordAssistantAudit({
+    actorId: userId,
+    action,
+    description: `Refinamiento de mensaje vía asistente (${interpretation.leadName ?? "lead"} · ${refinement}).`,
+    metadata: {
+      leadId: interpretation.leadId ?? null,
+      refinement,
+      originalStyle: result.originalStyle
+    }
+  });
+
+  return {
+    ...result,
+    persistContext: buildMessageRefinementContext({
+      leadId: interpretation.leadId,
+      leadName: interpretation.leadName,
+      selectedStyle: result.originalStyle,
+      message: refinedMessage
+    })
+  };
+}
+
+/**
  * @param {{ interpretation: object, userId: string, userMessage: string }} ctx
  */
 export async function executeAssistantAction({ interpretation, userId, userMessage }) {
@@ -938,6 +1213,66 @@ export async function executeAssistantAction({ interpretation, userId, userMessa
     return { action, ...data };
   }
 
+  if (action === "GET_WEEKLY_BUSINESS_SUMMARY") {
+    const data = await getWeeklyBusinessSummary();
+    await recordAssistantAudit({
+      actorId: userId,
+      action,
+      description: "Consulta de resumen comercial semanal vía asistente.",
+      metadata: {
+        leadsCreated: data.metrics.leadsCreated,
+        leadsClosedSuccess: data.metrics.leadsClosedSuccess,
+        periodStart: data.period.start,
+        periodEnd: data.period.end
+      }
+    });
+    return data;
+  }
+
+  if (action === "GET_BUSINESS_INSIGHTS") {
+    const data = await getBusinessInsights();
+    await recordAssistantAudit({
+      actorId: userId,
+      action,
+      description: "Consulta de insights comerciales vía asistente.",
+      metadata: {
+        insightCount: data.insights.length,
+        periodStart: data.period.start,
+        periodEnd: data.period.end
+      }
+    });
+    return data;
+  }
+
+  if (action === "GET_BUSINESS_RECOMMENDATIONS") {
+    const data = await getBusinessRecommendations();
+    await recordAssistantAudit({
+      actorId: userId,
+      action,
+      description: "Consulta de recomendaciones comerciales vía asistente.",
+      metadata: {
+        recommendationCount: data.recommendations.length,
+        topLevel: data.recommendations[0]?.level ?? null
+      }
+    });
+    return data;
+  }
+
+  if (action === "GET_RECOMMENDED_TASKS") {
+    const data = await getRecommendedTasks({ message: userMessage, interpretation });
+    await recordAssistantAudit({
+      actorId: userId,
+      action,
+      description: "Consulta de plan de trabajo vía asistente.",
+      metadata: {
+        scope: data.scope,
+        taskCount: data.tasks.length,
+        todayCount: data.tasks.filter((t) => t.horizon === "TODAY").length
+      }
+    });
+    return data;
+  }
+
   if (action === "GET_OLDEST_UNCONTACTED_LEADS") {
     const data = await getOldestUncontactedLeads();
     await recordAssistantAudit({
@@ -971,6 +1306,22 @@ export async function executeAssistantAction({ interpretation, userId, userMessa
 
   if (action === "SUGGEST_NEXT_ACTION") {
     return executeSuggestNextAction({ interpretation, userId });
+  }
+
+  if (action === "GENERATE_CONTACT_MESSAGE") {
+    return executeGenerateContactMessage({ interpretation, userId, userMessage });
+  }
+
+  if (action === "GENERATE_MULTIPLE_CONTACT_MESSAGES") {
+    return executeGenerateMultipleContactMessages({ interpretation, userId });
+  }
+
+  if (action === "SELECT_GENERATED_MESSAGE_OPTION") {
+    return executeSelectGeneratedMessageOption({ interpretation, userId });
+  }
+
+  if (action === "REFINE_SELECTED_MESSAGE") {
+    return executeRefineSelectedMessage({ interpretation, userId, userMessage });
   }
 
   if (!LEAD_TARGET_ACTIONS.has(action)) {

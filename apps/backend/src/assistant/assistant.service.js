@@ -34,6 +34,8 @@ import {
 import { buildAddLeadNoteChoiceReply } from "../services/assistant-lead-note.service.js";
 import { buildResumeLeadDisambiguationReply } from "../services/lead-resume.service.js";
 import { buildSuggestNextActionDisambiguationReply } from "../services/lead-suggest-action.service.js";
+import { buildGenerateContactMessageDisambiguationReply, buildGenerateMultipleContactMessagesDisambiguationReply, buildMultipleMessageSelectionClarificationReply, buildMessageRefinementClarificationReply, resolveMessageRefinement, normalizeRefinementText, NO_SELECTED_MESSAGE_REPLY } from "../services/lead-contact-message.service.js";
+import { PENDING_ACTIONS, getRefinementContextMessage, readAssistantContextMetadata } from "../services/assistant-conversation-context.service.js";
 import {
   clearAssistantContext,
   getActiveAssistantContext,
@@ -202,6 +204,14 @@ function buildReply({ interpretation, executed, result, errorMessage }) {
       return result.summaryText ?? `Resumen de ${result.fullName ?? "el lead"}.`;
     case "SUGGEST_NEXT_ACTION":
       return result.summaryText ?? result.recommendation ?? "Recomendación generada.";
+    case "GENERATE_CONTACT_MESSAGE":
+      return result.summaryText ?? result.message ?? "Mensaje generado.";
+    case "GENERATE_MULTIPLE_CONTACT_MESSAGES":
+      return result.summaryText ?? "Opciones de mensaje generadas.";
+    case "SELECT_GENERATED_MESSAGE_OPTION":
+      return result.summaryText ?? result.message ?? "Opción seleccionada.";
+    case "REFINE_SELECTED_MESSAGE":
+      return result.summaryText ?? result.message ?? "Mensaje refinado.";
     case "COUNT_LEADS_BY_STATUS":
       return result.replyText ?? buildCountAllLeadsReply(result);
     case "LIST_LEADS_BY_STATUS":
@@ -227,6 +237,14 @@ function buildReply({ interpretation, executed, result, errorMessage }) {
       return result.summaryText ?? "No tienes leads abiertos para priorizar.";
     case "GET_OVERVIEW":
       return result.summaryText ?? "No hay datos de resumen disponibles.";
+    case "GET_WEEKLY_BUSINESS_SUMMARY":
+      return result.summaryText ?? "No hay datos del resumen semanal.";
+    case "GET_BUSINESS_INSIGHTS":
+      return result.summaryText ?? "No hay insights disponibles.";
+    case "GET_BUSINESS_RECOMMENDATIONS":
+      return result.summaryText ?? "No hay recomendaciones comerciales disponibles.";
+    case "GET_RECOMMENDED_TASKS":
+      return result.summaryText ?? "No hay tareas recomendadas.";
     case "GET_OVERDUE_FOLLOWUPS":
       return result.summaryText ?? "No tienes seguimientos atrasados.";
     case "GET_OLDEST_UNCONTACTED_LEADS": {
@@ -317,6 +335,9 @@ export async function processAssistantChat({ userId, userName, message }) {
 
   const activeContext = await getActiveAssistantContext(userId);
 
+  // TODO: remove — log temporal para depurar contexto activo
+  console.log("[assistant-context] active pendingAction:", activeContext?.pendingAction ?? null);
+
   if (!activeContext) {
     if (isStandaloneSpanishStatusMessage(text)) {
       return {
@@ -326,8 +347,76 @@ export async function processAssistantChat({ userId, userName, message }) {
         reply: NO_PENDING_CONTEXT_REPLY
       };
     }
+    if (resolveMessageRefinement(text)) {
+      return {
+        interpretation: { action: "CLARIFY", clarification: NO_SELECTED_MESSAGE_REPLY },
+        executed: false,
+        result: null,
+        reply: NO_SELECTED_MESSAGE_REPLY
+      };
+    }
   } else {
-    const followUpInterpretation = buildInterpretationFromAssistantContext(activeContext, text);
+    let followUpInterpretation = buildInterpretationFromAssistantContext(activeContext, text);
+
+    if (
+      !followUpInterpretation &&
+      activeContext.pendingAction === PENDING_ACTIONS.MESSAGE_REFINEMENT
+    ) {
+      const contextMessage = getRefinementContextMessage(activeContext);
+      const refinement = resolveMessageRefinement(text);
+
+      // TODO: remove — logs temporales de depuración REFINE
+      console.log("[REFINE] message =", text);
+      console.log("[REFINE] normalized =", normalizeRefinementText(text));
+      console.log("[REFINE] refinement =", refinement);
+      console.log("[REFINE] contextMessageLength =", contextMessage.length);
+      console.log("[REFINE] pendingAction =", activeContext.pendingAction);
+
+      if (contextMessage && refinement) {
+        const metadata = readAssistantContextMetadata(activeContext);
+        followUpInterpretation = {
+          action: "REFINE_SELECTED_MESSAGE",
+          leadId: activeContext.leadId ?? null,
+          leadName: activeContext.leadName ?? null,
+          refinement,
+          originalStyle: metadata.selectedStyle ?? null,
+          message: contextMessage
+        };
+      }
+    }
+
+    if (
+      !followUpInterpretation &&
+      activeContext.pendingAction === PENDING_ACTIONS.MULTIPLE_MESSAGE_SELECTION &&
+      activeContext.metadata?.options?.length
+    ) {
+      const reply = buildMultipleMessageSelectionClarificationReply(activeContext.metadata.options);
+      return {
+        interpretation: { action: "CLARIFY", clarification: reply, viaContext: true },
+        executed: false,
+        result: null,
+        reply
+      };
+    }
+    if (
+      !followUpInterpretation &&
+      activeContext.pendingAction === PENDING_ACTIONS.MESSAGE_REFINEMENT &&
+      getRefinementContextMessage(activeContext)
+    ) {
+      const reply = buildMessageRefinementClarificationReply();
+      // TODO: remove — instrumentación temporal: origen del CLARIFY de refinamiento
+      console.log("[CLARIFY_SOURCE] MESSAGE_REFINEMENT_CLARIFY");
+      console.log("[CLARIFY_SOURCE] file =", import.meta.url);
+      console.log("[CLARIFY_SOURCE] followUpInterpretation =", followUpInterpretation);
+      console.log("[CLARIFY_SOURCE] pendingAction =", activeContext.pendingAction);
+      console.log("[CLARIFY_SOURCE] text =", text);
+      return {
+        interpretation: { action: "CLARIFY", clarification: reply, viaContext: true },
+        executed: false,
+        result: null,
+        reply
+      };
+    }
     if (
       !followUpInterpretation &&
       activeContext.metadata?.pendingDisambiguation &&
@@ -338,7 +427,13 @@ export async function processAssistantChat({ userId, userName, message }) {
           ? buildResumeLeadDisambiguationReply(activeContext.metadata.candidates)
           : activeContext.pendingAction === "SUGGEST_NEXT_ACTION"
             ? buildSuggestNextActionDisambiguationReply(activeContext.metadata.candidates)
-            : buildAddLeadNoteChoiceReply(activeContext.metadata.candidates);
+            : activeContext.pendingAction === "GENERATE_CONTACT_MESSAGE"
+              ? buildGenerateContactMessageDisambiguationReply(activeContext.metadata.candidates)
+              : activeContext.pendingAction === "GENERATE_MULTIPLE_CONTACT_MESSAGES"
+                ? buildGenerateMultipleContactMessagesDisambiguationReply(
+                    activeContext.metadata.candidates
+                  )
+                : buildAddLeadNoteChoiceReply(activeContext.metadata.candidates);
       return {
         interpretation: { action: "CLARIFY", clarification: reply, viaContext: true },
         executed: false,
@@ -381,6 +476,16 @@ export async function processAssistantChat({ userId, userName, message }) {
       }
 
       const executed = !result?.needsDisambiguation;
+
+      if (result?.persistContext) {
+        // TODO: remove — log temporal para depurar persistencia de contexto
+        console.log(
+          "[assistant-context] persisting pendingAction:",
+          result.persistContext.pendingAction
+        );
+        await saveAssistantContext({ userId, ...result.persistContext });
+      }
+
       if (executed && shouldClearContextAfterAction(followUpInterpretation.action)) {
         await clearAssistantContext(userId);
       }
