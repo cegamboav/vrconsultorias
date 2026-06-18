@@ -5,14 +5,17 @@ import Button from "../../../components/ui/Button";
 import Input from "../../../components/ui/Input";
 import PasswordField from "../../../components/ui/PasswordField";
 import { VR_PHONE } from "../../../brand/vrContent";
+import { getLoginInitialState } from "../loginInitialState.js";
 import { useAuth } from "../hooks/useAuth";
+
+const initialLogin = getLoginInitialState();
 
 export default function LoginPage() {
   const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [email, setEmail] = useState("admin@crmreferidos.local");
-  const [password, setPassword] = useState("admin123");
+  const [email, setEmail] = useState(initialLogin.email);
+  const [password, setPassword] = useState(initialLogin.password);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -63,13 +66,15 @@ export default function LoginPage() {
           <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6 shadow-lg sm:p-8">
             <h2 className="text-xl font-semibold text-white">Acceso privado</h2>
             <p className="mt-1 text-sm text-slate-400">
-              Ingrese con sus credenciales de equipo.
+              Ingrese con su cuenta de acceso autorizada.
             </p>
 
-            <form className="mt-6 stack-md" onSubmit={handleSubmit}>
+            <form className="mt-6 stack-md" onSubmit={handleSubmit} autoComplete="on">
               <Input
                 label="Email"
+                name="email"
                 type="email"
+                autoComplete="username"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="tu@email.com"
@@ -77,10 +82,11 @@ export default function LoginPage() {
               />
               <PasswordField
                 label="Contraseña"
+                name="password"
                 autoComplete="current-password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                placeholder="********"
+                placeholder="Su contraseña"
                 required
               />
 

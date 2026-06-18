@@ -19,8 +19,8 @@ export default function MarketingHeader() {
 
   return (
     <header className="marketing-header">
-      <div className="marketing-container flex h-[4.25rem] items-center justify-between gap-4">
-        <VrLogo variant="light" linkTo="/" />
+      <div className="marketing-container flex min-h-[5rem] items-center justify-between gap-4 py-2 sm:min-h-[5.25rem]">
+        <VrLogo variant="header" linkTo="/" />
 
         <nav className="hidden items-center gap-8 lg:flex" aria-label="Principal">
           {NAV.map((item) => (
@@ -35,7 +35,7 @@ export default function MarketingHeader() {
             (+506) 7200 6360
           </a>
           <AgendaCitaButton className="!h-10 !px-4 !text-sm" />
-          <PrivateAccessLink />
+          <PrivateAccessLink className="marketing-header-private-link" />
         </div>
 
         <button
@@ -55,13 +55,13 @@ export default function MarketingHeader() {
       </div>
 
       {open ? (
-        <div className="border-t border-slate-200/80 bg-white px-4 py-4 lg:hidden">
+        <div className="marketing-header-mobile lg:hidden">
           <nav className="flex flex-col gap-1">
             {NAV.map((item) => (
               <a
                 key={item.href}
                 href={item.href}
-                className="rounded-lg px-3 py-2.5 text-sm font-medium text-brand-navy hover:bg-slate-50"
+                className="marketing-header-mobile-link"
                 onClick={closeMenu}
               >
                 {item.label}
@@ -70,11 +70,11 @@ export default function MarketingHeader() {
             <div className="mt-3" onClick={closeMenu} role="presentation">
               <AgendaCitaButton className="w-full" />
             </div>
-            <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4">
-              <a href={VR_PHONE_HREF} className="text-sm text-slate-600">
+            <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-4">
+              <a href={VR_PHONE_HREF} className="marketing-header-mobile-phone">
                 (+506) 7200 6360
               </a>
-              <PrivateAccessLink />
+              <PrivateAccessLink className="marketing-header-private-link" />
             </div>
           </nav>
         </div>
